@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Life Tracker</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===== TODAY ===== -->
+  <section class="screen" id="screen-today" data-screen="today">
+    <header class="screen-head">
+      <div>
+        <div class="eyebrow" id="today-date">Сегодня</div>
+        <h1>Сегодня</h1>
+      </div>
+      <button class="icon-btn" data-action="add-habit" aria-label="Добавить привычку">+</button>
+    </header>
+
+    <div class="card ring-card">
+      <div class="ring-wrap">
+        <svg viewBox="0 0 120 120" class="ring">
+          <circle cx="60" cy="60" r="52" class="ring-track"/>
+          <circle cx="60" cy="60" r="52" class="ring-value" id="today-ring"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-pct" id="today-pct">0%</div>
+          <div class="ring-label">выполнено</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Привычки и задачи</h2>
+        <span class="muted" id="today-habit-count">0 задач</span>
+      </div>
+      <ul class="list" id="today-habit-list"></ul>
+      <button class="ghost-btn" data-action="add-habit">+ Добавить</button>
+    </div>
+
+    <div class="grid-2">
+      <div class="card mini" data-action="open-water">
+        <div class="mini-label">Вода</div>
+        <div class="mini-value" id="today-water-val">0 / 8</div>
+        <div class="bar"><div class="bar-fill" id="today-water-bar"></div></div>
+      </div>
+      <div class="card mini" data-action="open-nutrition">
+        <div class="mini-label">Калории</div>
+        <div class="mini-value" id="today-cal-val">0 / 2300</div>
+        <div class="bar"><div class="bar-fill accent-amber" id="today-cal-bar"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== OVERVIEW ===== -->
+  <section class="screen" id="screen-overview" data-screen="overview">
+    <header class="screen-head">
+      <div>
+        <div class="eyebrow" id="overview-date">Обзор</div>
+        <h1>Обзор</h1>
+      </div>
+    </header>
+
+    <div class="bento">
+      <div class="card bento-item" data-action="open-nutrition">
+        <div class="card-head"><h2>Питание</h2></div>
+        <div class="stat-row">
+          <span class="stat-num" id="ov-cal">0</span>
+          <span class="muted">/ 2300 ккал</span>
+        </div>
+        <div class="bar"><div class="bar-fill accent-amber" id="ov-cal-bar"></div></div>
+      </div>
+
+      <div class="card bento-item" data-action="open-workout">
+        <div class="card-head"><h2>Тренировка</h2></div>
+        <div class="stat-row">
+          <span class="stat-num" id="ov-workout">0</span>
+          <span class="muted">/ 60 мин</span>
+        </div>
+        <div class="bar"><div class="bar-fill accent-blue" id="ov-workout-bar"></div></div>
+      </div>
+
+      <div class="card bento-item" data-action="open-spending">
+        <div class="card-head"><h2>Траты</h2></div>
+        <div class="stat-row">
+          <span class="stat-num" id="ov-spend">0 ₽</span>
+        </div>
+        <ul class="list compact" id="ov-spend-list"></ul>
+        <button class="ghost-btn" data-action="add-spend">+ Трата</button>
+      </div>
+
+      <div class="card bento-item" data-action="open-tasks">
+        <div class="card-head"><h2>Задачи</h2></div>
+        <div class="stat-row">
+          <span class="stat-num" id="ov-tasks">0</span>
+          <span class="muted">активных</span>
+        </div>
+        <button class="ghost-btn" data-action="add-task">+ Задача</button>
+      </div>
+
+      <div class="card bento-item" data-action="open-notes">
+        <div class="card-head"><h2>Заметки</h2></div>
+        <ul class="list compact" id="ov-notes-list"></ul>
+        <button class="ghost-btn" data-action="add-note">+ Заметка</button>
+      </div>
+
+      <div class="card bento-item">
+        <div class="card-head"><h2>Встречи</h2></div>
+        <p class="muted small">Планирование встреч появится в следующей версии</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== HISTORY ===== -->
+  <section class="screen" id="screen-history" data-screen="history">
+    <header class="screen-head">
+      <div>
+        <div class="eyebrow">История</div>
+        <h1 id="history-month-label">История</h1>
+      </div>
+      <div class="month-nav">
+        <button class="icon-btn" data-action="hist-prev">‹</button>
+        <button class="icon-btn" data-action="hist-next">›</button>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="calendar-grid" id="history-grid"></div>
+    </div>
+
+    <div class="card" id="history-day-detail">
+      <div class="card-head"><h2 id="history-day-title">Выберите день</h2></div>
+      <ul class="list" id="history-day-list"></ul>
+    </div>
+  </section>
+
+  <!-- ===== ANALYTICS ===== -->
+  <section class="screen" id="screen-analytics" data-screen="analytics">
+    <header class="screen-head">
+      <div>
+        <div class="eyebrow">Аналитика</div>
+        <h1>Аналитика</h1>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="card-head"><h2>Прогресс привычек</h2><span class="muted" id="an-habit-avg">0%</span></div>
+      <canvas id="chart-habits" class="chart" height="140"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Калории</h2><span class="muted" id="an-cal-avg">0 ккал</span></div>
+      <canvas id="chart-calories" class="chart" height="140"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Траты</h2><span class="muted" id="an-spend-avg">0 ₽</span></div>
+      <canvas id="chart-spending" class="chart" height="140"></canvas>
+    </div>
+  </section>
+
+  <!-- ===== ASSISTANT ===== -->
+  <section class="screen" id="screen-assistant" data-screen="assistant">
+    <header class="screen-head">
+      <div>
+        <div class="eyebrow">ИИ</div>
+        <h1>Помощник</h1>
+      </div>
+    </header>
+
+    <div class="chat" id="chat-log"></div>
+
+    <form class="chat-input" id="chat-form">
+      <input type="text" id="chat-text" placeholder="Напиши сообщение..." autocomplete="off">
+      <button type="submit" class="icon-btn accent">➤</button>
+    </form>
+  </section>
+
+</div>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tab-btn" data-tab="today" aria-label="Сегодня">
+    <svg viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
+  </button>
+  <button class="tab-btn" data-tab="overview" aria-label="Обзор">
+    <svg viewBox="0 0 24 24"><path d="M4 20V10h4v10zm6 0V4h4v16zm6 0v-7h4v7z"/></svg>
+  </button>
+  <button class="tab-btn" data-tab="history" aria-label="История">
+    <svg viewBox="0 0 24 24"><path d="M5 3v2H3v16h18V5h-2V3h-2v2H7V3zM5 9h14v10H5z"/></svg>
+  </button>
+  <button class="tab-btn" data-tab="analytics" aria-label="Аналитика">
+    <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8v3l-8 8-4-4-6 6z"/></svg>
+  </button>
+  <button class="tab-btn accent" data-tab="assistant" aria-label="Помощник">
+    <svg viewBox="0 0 24 24"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8z"/></svg>
+  </button>
+</nav>
+
+<div class="sheet-backdrop" id="sheet-backdrop"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div id="sheet-content"></div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
