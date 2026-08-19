@@ -43,17 +43,23 @@
       <button class="ghost-btn" data-action="add-habit">+ Добавить</button>
     </div>
 
-    <div class="grid-2">
-      <div class="card mini" data-action="open-water">
-        <div class="mini-label">Вода</div>
-        <div class="mini-value" id="today-water-val">0 / 8</div>
-        <div class="bar"><div class="bar-fill" id="today-water-bar"></div></div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Вода</h2>
+        <span class="muted" id="today-water-val">0 / 8 стак. · 0.0 л</span>
       </div>
-      <div class="card mini" data-action="open-nutrition">
-        <div class="mini-label">Калории</div>
-        <div class="mini-value" id="today-cal-val">0 / 2300</div>
-        <div class="bar"><div class="bar-fill accent-amber" id="today-cal-bar"></div></div>
+      <div class="cup-row" id="today-cup-row"></div>
+      <div class="water-controls">
+        <button class="round-btn" data-action="water-minus">−</button>
+        <div class="bar water-bar"><div class="bar-fill accent-blue" id="today-water-bar"></div></div>
+        <button class="round-btn" data-action="water-plus">+</button>
       </div>
+    </div>
+
+    <div class="card mini" data-action="open-nutrition-detail">
+      <div class="mini-label">Калории</div>
+      <div class="mini-value" id="today-cal-val">0 / 2300</div>
+      <div class="bar"><div class="bar-fill accent-amber" id="today-cal-bar"></div></div>
     </div>
   </section>
 
@@ -66,34 +72,36 @@
       </div>
     </header>
 
+    <div class="card tap-card" data-action="open-nutrition-detail">
+      <div class="row-with-ring">
+        <div class="mini-ring-wrap">
+          <svg viewBox="0 0 60 60" class="mini-ring">
+            <circle cx="30" cy="30" r="25" class="ring-track"/>
+            <circle cx="30" cy="30" r="25" class="ring-value accent-amber-stroke" id="ov-cal-ring"/>
+          </svg>
+        </div>
+        <div class="row-with-ring-text">
+          <h2>Питание</h2>
+          <div class="stat-row"><span class="stat-num" id="ov-cal">0</span><span class="muted">/ 2300 ккал</span></div>
+          <div class="muted small" id="ov-cal-left">Осталось 2300 ккал</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card tap-card" data-action="open-workout-detail">
+      <div class="card-head"><h2>Тренировки</h2><span class="tap-hint">›</span></div>
+      <div class="stat-row"><span class="stat-num" id="ov-workout">0</span><span class="muted">/ 60 мин</span></div>
+      <div class="bar"><div class="bar-fill accent-blue" id="ov-workout-bar"></div></div>
+    </div>
+
+    <div class="card tap-card" data-action="open-finance-detail">
+      <div class="card-head"><h2>Траты</h2><span class="tap-hint">›</span></div>
+      <div class="stat-row"><span class="stat-num" id="ov-spend">0 ₽</span></div>
+      <div class="bar"><div class="bar-fill accent-amber" id="ov-spend-bar"></div></div>
+      <ul class="list compact" id="ov-spend-list"></ul>
+    </div>
+
     <div class="bento">
-      <div class="card bento-item" data-action="open-nutrition">
-        <div class="card-head"><h2>Питание</h2></div>
-        <div class="stat-row">
-          <span class="stat-num" id="ov-cal">0</span>
-          <span class="muted">/ 2300 ккал</span>
-        </div>
-        <div class="bar"><div class="bar-fill accent-amber" id="ov-cal-bar"></div></div>
-      </div>
-
-      <div class="card bento-item" data-action="open-workout">
-        <div class="card-head"><h2>Тренировка</h2></div>
-        <div class="stat-row">
-          <span class="stat-num" id="ov-workout">0</span>
-          <span class="muted">/ 60 мин</span>
-        </div>
-        <div class="bar"><div class="bar-fill accent-blue" id="ov-workout-bar"></div></div>
-      </div>
-
-      <div class="card bento-item" data-action="open-spending">
-        <div class="card-head"><h2>Траты</h2></div>
-        <div class="stat-row">
-          <span class="stat-num" id="ov-spend">0 ₽</span>
-        </div>
-        <ul class="list compact" id="ov-spend-list"></ul>
-        <button class="ghost-btn" data-action="add-spend">+ Трата</button>
-      </div>
-
       <div class="card bento-item" data-action="open-tasks">
         <div class="card-head"><h2>Задачи</h2></div>
         <div class="stat-row">
@@ -109,10 +117,110 @@
         <button class="ghost-btn" data-action="add-note">+ Заметка</button>
       </div>
 
-      <div class="card bento-item">
+      <div class="card bento-item disabled">
         <div class="card-head"><h2>Встречи</h2></div>
-        <p class="muted small">Планирование встреч появится в следующей версии</p>
+        <p class="muted small">Скоро — планирование встреч</p>
       </div>
+    </div>
+  </section>
+
+  <!-- ===== FINANCE DETAIL ===== -->
+  <section class="screen" id="screen-finance-detail" data-screen="finance-detail">
+    <header class="screen-head">
+      <button class="icon-btn" data-action="back-to-overview">‹</button>
+      <div><h1>Финансы</h1></div>
+      <button class="icon-btn accent" data-action="add-transaction">+</button>
+    </header>
+
+    <div class="card">
+      <div class="mini-label">Баланс (распределённый капитал)</div>
+      <div class="balance-num" id="fin-balance">0 ₽</div>
+      <div class="grid-2" style="margin-top:12px">
+        <div class="mini-stat">
+          <div class="mini-label">Доход · 7 дней</div>
+          <div class="mini-value accent-teal-text" id="fin-income-7d">0 ₽</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-label">Расход · 7 дней</div>
+          <div class="mini-value accent-red-text" id="fin-expense-7d">0 ₽</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Распределение капитала</h2></div>
+      <div class="alloc-list" id="fin-allocation"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>История</h2></div>
+      <ul class="list" id="fin-history"></ul>
+    </div>
+  </section>
+
+  <!-- ===== WORKOUT DETAIL ===== -->
+  <section class="screen" id="screen-workout-detail" data-screen="workout-detail">
+    <header class="screen-head">
+      <button class="icon-btn" data-action="back-to-overview">‹</button>
+      <div><h1>Тренировки</h1></div>
+      <div style="width:36px"></div>
+    </header>
+
+    <div class="card">
+      <div class="card-head"><h2>Сегодня</h2></div>
+      <div class="stat-row"><span class="stat-num" id="wk-minutes">0</span><span class="muted">/ 60 мин</span></div>
+      <div class="bar"><div class="bar-fill accent-blue" id="wk-bar"></div></div>
+      <div class="chip-row" style="margin-top:12px">
+        <span class="chip" data-wk="-10">−10 мин</span>
+        <span class="chip" data-wk="10">+10 мин</span>
+        <span class="chip" data-wk="30">+30 мин</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>План на неделю</h2></div>
+      <div class="plan-list" id="wk-plan"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Советы от ИИ</h2></div>
+      <p class="muted small">ИИ пока не подключён к приложению — нужен бэкенд, который будет обращаться к модели.</p>
+      <button class="ghost-btn" data-action="ai-tip-stub">Получить совет</button>
+    </div>
+  </section>
+
+  <!-- ===== NUTRITION DETAIL ===== -->
+  <section class="screen" id="screen-nutrition-detail" data-screen="nutrition-detail">
+    <header class="screen-head">
+      <button class="icon-btn" data-action="back-to-overview">‹</button>
+      <div><h1>Питание</h1></div>
+      <div style="width:36px"></div>
+    </header>
+
+    <div class="card">
+      <div class="card-head"><h2>Сегодня</h2><span class="muted" id="nu-goal-label">цель 2300 ккал</span></div>
+      <div class="stat-row"><span class="stat-num" id="nu-eaten">0</span><span class="muted">ккал съедено</span></div>
+      <div class="bar"><div class="bar-fill accent-amber" id="nu-bar"></div></div>
+      <div class="chip-row" style="margin-top:12px">
+        <span class="chip" data-nu="-100">−100</span>
+        <span class="chip" data-nu="100">+100</span>
+        <span class="chip" data-nu="300">+300</span>
+      </div>
+      <button class="ghost-btn" data-action="edit-cal-goal">Изменить цель</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>📷 Фото еды</h2></div>
+      <p class="muted small">Сфотографируй еду — приложение оценит калорийность.</p>
+      <input type="file" accept="image/*" capture="environment" id="food-photo-input" style="display:none">
+      <button class="ghost-btn" id="food-photo-btn">Сделать фото</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>План питания</h2></div>
+      <div class="plan-list" id="nu-plan"></div>
+      <p class="muted small" style="margin-top:8px">ИИ пока не подключён — план можно заполнить вручную.</p>
+      <button class="ghost-btn" data-action="ai-meal-stub">Сгенерировать через ИИ</button>
     </div>
   </section>
 
@@ -148,19 +256,22 @@
       </div>
     </header>
 
-    <div class="card">
+    <div class="card tap-card" data-action="chart-detail" data-chart="habits">
       <div class="card-head"><h2>Прогресс привычек</h2><span class="muted" id="an-habit-avg">0%</span></div>
       <canvas id="chart-habits" class="chart" height="140"></canvas>
+      <div class="tap-hint-row">Подробнее ›</div>
     </div>
 
-    <div class="card">
+    <div class="card tap-card" data-action="chart-detail" data-chart="calories">
       <div class="card-head"><h2>Калории</h2><span class="muted" id="an-cal-avg">0 ккал</span></div>
       <canvas id="chart-calories" class="chart" height="140"></canvas>
+      <div class="tap-hint-row">Подробнее ›</div>
     </div>
 
-    <div class="card">
+    <div class="card tap-card" data-action="chart-detail" data-chart="spending">
       <div class="card-head"><h2>Траты</h2><span class="muted" id="an-spend-avg">0 ₽</span></div>
       <canvas id="chart-spending" class="chart" height="140"></canvas>
+      <div class="tap-hint-row">Подробнее ›</div>
     </div>
   </section>
 

@@ -329,3 +329,149 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
   cursor: pointer;
 }
 .chip.selected { background: var(--teal-soft); color: #6FCBBB; border-color: rgba(44,140,127,0.4); }
+
+/* ===== Water card ===== */
+.cup-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.cup {
+  width: 30px; height: 34px;
+  border-radius: 6px 6px 10px 10px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  display: flex; align-items: flex-end; justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cup.filled { background: var(--blue-soft); border-color: rgba(74,111,160,0.5); }
+.water-controls { display: flex; align-items: center; gap: 10px; }
+.water-bar { flex: 1; }
+.round-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ===== Tap cards ===== */
+.tap-card { cursor: pointer; }
+.tap-hint { color: var(--text-tertiary); font-size: 18px; }
+.tap-hint-row { text-align: right; color: var(--text-tertiary); font-size: 12.5px; margin-top: 6px; }
+.card.disabled { opacity: .6; }
+
+.row-with-ring { display: flex; align-items: center; gap: 14px; }
+.mini-ring-wrap { width: 60px; height: 60px; flex-shrink: 0; }
+.mini-ring { width: 60px; height: 60px; transform: rotate(-90deg); }
+.mini-ring .ring-track { stroke-width: 7; }
+.mini-ring .ring-value {
+  fill: none; stroke-width: 7; stroke-linecap: round;
+  stroke-dasharray: 157; stroke-dashoffset: 157;
+  transition: stroke-dashoffset .4s ease;
+}
+.ring-value.accent-amber-stroke { stroke: var(--amber); }
+.row-with-ring-text { flex: 1; }
+.row-with-ring-text h2 { margin-bottom: 4px; }
+
+/* ===== Finance detail ===== */
+.balance-num { font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.mini-stat { background: var(--surface-2); border-radius: var(--radius-s); padding: 10px 12px; }
+.accent-teal-text { color: #6FCBBB; }
+.accent-red-text { color: #D08B87; }
+
+.alloc-list { display: flex; flex-direction: column; gap: 10px; }
+.alloc-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-2);
+  border-radius: var(--radius-s);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.alloc-label { font-size: 14px; }
+.alloc-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.alloc-amount { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ===== Plan lists (workout / meals) ===== */
+.plan-list { display: flex; flex-direction: column; gap: 8px; }
+.plan-row { display: flex; align-items: center; gap: 10px; }
+.plan-day { width: 40px; flex-shrink: 0; font-size: 12.5px; color: var(--text-secondary); }
+.plan-row input.field { margin-bottom: 0; padding: 9px 12px; font-size: 13.5px; }
+
+/* ===== Card icon badges (bento headers) ===== */
+.card-icon {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.card-icon svg { width: 16px; height: 16px; }
+.card-icon.i-teal { background: var(--teal-soft); } .card-icon.i-teal svg { fill: #6FCBBB; }
+.card-icon.i-blue { background: var(--blue-soft); } .card-icon.i-blue svg { fill: #8FB0DE; }
+.card-icon.i-amber { background: var(--amber-soft); } .card-icon.i-amber svg { fill: #D9B679; }
+.card-icon.i-violet { background: var(--violet-soft); } .card-icon.i-violet svg { fill: #C4BCE8; }
+.card-head-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.card-head-row h2 { flex: 1; }
+.bento-item.tappable { cursor: pointer; }
+.chev { color: var(--text-tertiary); font-size: 15px; }
+
+/* ===== Detail overlay (full screen) ===== */
+.detail-view {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 45;
+  transform: translateX(100%);
+  transition: transform .25s cubic-bezier(.32,.72,0,1);
+  overflow-y: auto;
+}
+.detail-view.open { transform: translateX(0); }
+.detail-head {
+  position: sticky; top: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px;
+  background: rgba(10,12,16,0.92);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+.detail-head h1 { font-size: 19px; }
+.detail-body { padding: 16px 16px 40px; max-width: 480px; margin: 0 auto; }
+
+/* ===== Capital allocation ===== */
+.capital-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.capital-row:last-child { border-bottom: none; }
+.capital-name { font-size: 14px; }
+.capital-bar-wrap { flex: 1; margin: 0 12px; }
+.capital-amt { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ===== Water glass row ===== */
+.glass-row { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.glass {
+  width: 22px; height: 26px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 4px 4px 8px 8px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.glass.filled { background: linear-gradient(180deg, var(--blue), #2F4C74); border-color: transparent; }
+
+/* ===== Tip / plan cards ===== */
+.tip-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  min-height: 20px;
+}
+.hint { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; margin-top: 8px; }
+.income-amt { color: #6FCBBB; }
+.expense-amt { color: #D08F8B; }

@@ -1,24 +1,30 @@
 /**
  * Minimal canvas chart helpers — no external chart library dependency.
- * Keeps the MVP self-contained; swap for a richer lib later if needed.
+ *
+ * Bug fix note: previously cssHeight was read back from canvas.getAttribute
+ * ('height'), but setting canvas.height (a DPR-scaled pixel value) reflects
+ * into that same attribute — so every re-render multiplied the height by
+ * devicePixelRatio again, making the canvas grow without bound. Height is
+ * now always passed in explicitly (default 140) instead of read back from
+ * the element, so it can never compound.
  */
 const Charts = (() => {
-  function setupCanvas(canvas) {
+  function setupCanvas(canvas, height) {
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = canvas.height; // keep CSS height attr
-    const cssHeight = parseInt(canvas.getAttribute('height'), 10) || 140;
+    const cssHeight = height || 140;
+    const cssWidth = canvas.getBoundingClientRect().width || canvas.parentElement.clientWidth || 300;
+    canvas.width = cssWidth * dpr;
     canvas.height = cssHeight * dpr;
     canvas.style.height = cssHeight + 'px';
     const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    return { ctx, w: rect.width, h: cssHeight };
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: cssWidth, h: cssHeight };
   }
 
   function line(canvas, values, opts = {}) {
-    const { ctx, w, h } = setupCanvas(canvas);
+    const { ctx, w, h } = setupCanvas(canvas, opts.height);
     ctx.clearRect(0, 0, w, h);
+    if (!values.length) return;
     const pad = 10;
     const max = opts.max ?? Math.max(...values, 1);
     const min = opts.min ?? 0;
@@ -29,7 +35,6 @@ const Charts = (() => {
       return [x, y];
     });
 
-    // filled area
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, color + '33');
     grad.addColorStop(1, color + '00');
@@ -41,7 +46,6 @@ const Charts = (() => {
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // line
     ctx.beginPath();
     points.forEach((p, i) => (i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1])));
     ctx.strokeStyle = color;
@@ -49,18 +53,14 @@ const Charts = (() => {
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    // dots
     ctx.fillStyle = color;
-    points.forEach(p => {
-      ctx.beginPath();
-      ctx.arc(p[0], p[1], 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    points.forEach(p => { ctx.beginPath(); ctx.arc(p[0], p[1], 2.5, 0, Math.PI * 2); ctx.fill(); });
   }
 
   function bars(canvas, values, opts = {}) {
-    const { ctx, w, h } = setupCanvas(canvas);
+    const { ctx, w, h } = setupCanvas(canvas, opts.height);
     ctx.clearRect(0, 0, w, h);
+    if (!values.length) return;
     const pad = 10;
     const max = opts.max ?? Math.max(...values, 1);
     const color = opts.color || '#A9803D';

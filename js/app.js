@@ -24,6 +24,7 @@ const Router = (() => {
       b.classList.toggle('active', b.dataset.tab === name);
     });
     if (renderers[name]) renderers[name]();
+    window.scrollTo(0, 0);
   }
 
   return { register, go, current: () => current };
@@ -31,6 +32,11 @@ const Router = (() => {
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => Router.go(btn.dataset.tab));
+});
+
+document.getElementById('app').addEventListener('click', e => {
+  const back = e.target.closest('[data-action="back-to-overview"]');
+  if (back) Router.go('overview');
 });
 
 // ---- Bottom sheet ----
@@ -61,6 +67,7 @@ function formatToday() {
   const d = new Date();
   return `${DOW[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`;
 }
+function fmtMoney(n) { return Math.round(n).toLocaleString('ru-RU') + ' ₽'; }
 
 // ==========================================================
 // TODAY
@@ -89,21 +96,42 @@ function renderToday() {
     </li>
   `).join('') || '<li class="muted">Пока нет привычек</li>';
 
-  document.getElementById('today-water-val').textContent = `${s.water.count} / ${s.water.goal}`;
-  document.getElementById('today-water-bar').style.width = Math.min(100, (s.water.count / s.water.goal) * 100) + '%';
+  renderWaterCard();
 
   document.getElementById('today-cal-val').textContent = `${s.nutrition.eaten} / ${s.nutrition.goal}`;
   document.getElementById('today-cal-bar').style.width = Math.min(100, (s.nutrition.eaten / s.nutrition.goal) * 100) + '%';
 }
 Router.register('today', renderToday);
 
+function renderWaterCard() {
+  const s = Store.getState();
+  const liters = (s.water.count * s.water.mlPerGlass / 1000).toFixed(1);
+  document.getElementById('today-water-val').textContent = `${s.water.count} / ${s.water.goal} стак. · ${liters} л`;
+  document.getElementById('today-water-bar').style.width = Math.min(100, (s.water.count / s.water.goal) * 100) + '%';
+
+  const row = document.getElementById('today-cup-row');
+  let html = '';
+  for (let i = 1; i <= s.water.goal; i++) {
+    html += `<div class="cup ${i <= s.water.count ? 'filled' : ''}" data-set-water="${i}">${i <= s.water.count ? '💧' : ''}</div>`;
+  }
+  row.innerHTML = html;
+}
+
 document.getElementById('screen-today').addEventListener('click', e => {
   const t = e.target;
   if (t.dataset.toggleHabit) { Store.toggleHabit(t.dataset.toggleHabit); renderToday(); }
   if (t.dataset.delHabit) { Store.removeHabit(t.dataset.delHabit); renderToday(); }
   if (t.closest('[data-action="add-habit"]')) openAddHabitSheet();
-  if (t.closest('[data-action="open-water"]')) openWaterSheet();
-  if (t.closest('[data-action="open-nutrition"]')) openNutritionSheet();
+  if (t.closest('[data-action="open-nutrition-detail"]')) Router.go('nutrition-detail');
+  if (t.dataset.setWater) {
+    const clicked = parseInt(t.dataset.setWater, 10);
+    const s = Store.getState();
+    // tapping the already-filled top cup removes it; otherwise fill up to it
+    Store.setWater(clicked === s.water.count ? clicked - 1 : clicked);
+    renderWaterCard();
+  }
+  if (t.closest('[data-action="water-plus"]')) { Store.addWater(1); renderWaterCard(); }
+  if (t.closest('[data-action="water-minus"]')) { Store.addWater(-1); renderWaterCard(); }
 });
 
 function openAddHabitSheet() {
@@ -114,38 +142,7 @@ function openAddHabitSheet() {
   `, root => {
     root.querySelector('#sheet-habit-save').addEventListener('click', () => {
       const val = root.querySelector('#sheet-habit-text').value.trim();
-      if (val) { Store.addHabit(val); renderToday(); renderOverview(); Sheet.close(); }
-    });
-  });
-}
-
-function openWaterSheet() {
-  const s = Store.getState();
-  Sheet.open(`
-    <h3>Вода</h3>
-    <div class="stat-row"><span class="stat-num">${s.water.count}</span><span class="muted">/ ${s.water.goal} стаканов</span></div>
-    <div class="chip-row">
-      <span class="chip" id="w-minus">− стакан</span>
-      <span class="chip" id="w-plus">+ стакан</span>
-    </div>
-    <button class="primary-btn" id="w-done">Готово</button>
-  `, root => {
-    root.querySelector('#w-plus').addEventListener('click', () => { Store.addWater(1); renderToday(); openWaterSheet(); });
-    root.querySelector('#w-minus').addEventListener('click', () => { Store.addWater(-1); renderToday(); openWaterSheet(); });
-    root.querySelector('#w-done').addEventListener('click', Sheet.close);
-  });
-}
-
-function openNutritionSheet() {
-  const s = Store.getState();
-  Sheet.open(`
-    <h3>Калории</h3>
-    <input class="field" id="sheet-cal" type="number" inputmode="numeric" placeholder="Съедено, ккал" value="${s.nutrition.eaten || ''}">
-    <button class="primary-btn" id="sheet-cal-save">Сохранить</button>
-  `, root => {
-    root.querySelector('#sheet-cal-save').addEventListener('click', () => {
-      const val = parseInt(root.querySelector('#sheet-cal').value, 10);
-      if (!isNaN(val)) { Store.setNutrition(val); renderToday(); renderOverview(); Sheet.close(); }
+      if (val) { Store.addHabit(val); renderToday(); Sheet.close(); }
     });
   });
 }
@@ -158,16 +155,21 @@ function renderOverview() {
   const s = Store.getState();
 
   document.getElementById('ov-cal').textContent = s.nutrition.eaten;
-  document.getElementById('ov-cal-bar').style.width = Math.min(100, (s.nutrition.eaten / s.nutrition.goal) * 100) + '%';
+  const calPct = Math.min(100, (s.nutrition.eaten / s.nutrition.goal) * 100);
+  const circumference = 157;
+  document.getElementById('ov-cal-ring').style.strokeDashoffset = circumference - (calPct / 100) * circumference;
+  const left = Math.max(0, s.nutrition.goal - s.nutrition.eaten);
+  document.getElementById('ov-cal-left').textContent = `Осталось ${left} ккал`;
 
   document.getElementById('ov-workout').textContent = s.workout.minutes;
   document.getElementById('ov-workout-bar').style.width = Math.min(100, (s.workout.minutes / s.workout.goal) * 100) + '%';
 
-  const todaySpend = s.spending.filter(sp => sp.date === Store.todayISO());
-  const spendTotal = todaySpend.reduce((sum, sp) => sum + sp.amount, 0);
-  document.getElementById('ov-spend').textContent = spendTotal + ' ₽';
-  document.getElementById('ov-spend-list').innerHTML = todaySpend.slice(0, 3).map(sp => `
-    <li><span class="item-text">${escapeHtml(sp.category)}</span><span class="muted">−${sp.amount} ₽</span></li>
+  const todaySpend = s.transactions.filter(t => t.date === Store.todayISO() && t.type === 'expense');
+  const spendTotal = todaySpend.reduce((sum, t) => sum + t.amount, 0);
+  document.getElementById('ov-spend').textContent = fmtMoney(spendTotal);
+  document.getElementById('ov-spend-bar').style.width = Math.min(100, (spendTotal / 2000) * 100) + '%';
+  document.getElementById('ov-spend-list').innerHTML = todaySpend.slice(0, 3).map(t => `
+    <li><span class="item-text">${escapeHtml(t.category)}</span><span class="muted">−${Math.round(t.amount)} ₽</span></li>
   `).join('') || '<li class="muted">Пока нет трат</li>';
 
   const activeTasks = s.tasks.filter(t => !t.done);
@@ -181,59 +183,12 @@ Router.register('overview', renderOverview);
 
 document.getElementById('screen-overview').addEventListener('click', e => {
   const t = e.target;
-  if (t.closest('[data-action="open-nutrition"]')) openNutritionSheet();
-  if (t.closest('[data-action="open-workout"]')) openWorkoutSheet();
-  if (t.closest('[data-action="add-spend"]')) openAddSpendSheet();
-  if (t.closest('[data-action="add-task"]')) openAddTaskSheet();
-  if (t.closest('[data-action="add-note"]')) openAddNoteSheet();
+  if (t.closest('[data-action="open-nutrition-detail"]')) Router.go('nutrition-detail');
+  if (t.closest('[data-action="open-workout-detail"]')) Router.go('workout-detail');
+  if (t.closest('[data-action="open-finance-detail"]')) Router.go('finance-detail');
+  if (t.closest('[data-action="add-task"]')) { e.stopPropagation(); openAddTaskSheet(); }
+  if (t.closest('[data-action="add-note"]')) { e.stopPropagation(); openAddNoteSheet(); }
 });
-
-function openWorkoutSheet() {
-  const s = Store.getState();
-  Sheet.open(`
-    <h3>Тренировка</h3>
-    <input class="field" id="sheet-workout" type="number" inputmode="numeric" placeholder="Минут сегодня" value="${s.workout.minutes || ''}">
-    <button class="primary-btn" id="sheet-workout-save">Сохранить</button>
-  `, root => {
-    root.querySelector('#sheet-workout-save').addEventListener('click', () => {
-      const val = parseInt(root.querySelector('#sheet-workout').value, 10);
-      if (!isNaN(val)) {
-        Store.addWorkoutMinutes(val - s.workout.minutes);
-        renderOverview();
-        Sheet.close();
-      }
-    });
-  });
-}
-
-function openAddSpendSheet() {
-  const cats = ['Продукты', 'Кофе', 'Транспорт', 'Подписка', 'Другое'];
-  let selected = cats[0];
-  Sheet.open(`
-    <h3>Новая трата</h3>
-    <input class="field" id="sheet-amt" type="number" inputmode="numeric" placeholder="Сумма, ₽">
-    <div class="chip-row" id="sheet-cats">
-      ${cats.map((c, i) => `<span class="chip ${i === 0 ? 'selected' : ''}" data-cat="${c}">${c}</span>`).join('')}
-    </div>
-    <button class="primary-btn" id="sheet-spend-save">Добавить</button>
-  `, root => {
-    root.querySelectorAll('[data-cat]').forEach(chip => {
-      chip.addEventListener('click', () => {
-        root.querySelectorAll('[data-cat]').forEach(c => c.classList.remove('selected'));
-        chip.classList.add('selected');
-        selected = chip.dataset.cat;
-      });
-    });
-    root.querySelector('#sheet-spend-save').addEventListener('click', () => {
-      const amt = parseFloat(root.querySelector('#sheet-amt').value);
-      if (!isNaN(amt) && amt > 0) {
-        Store.addSpend(amt, selected);
-        renderOverview();
-        Sheet.close();
-      }
-    });
-  });
-}
 
 function openAddTaskSheet() {
   Sheet.open(`
@@ -262,6 +217,210 @@ function openAddNoteSheet() {
 }
 
 // ==========================================================
+// FINANCE DETAIL
+// ==========================================================
+const CAPITAL_LABELS = {
+  reserve: ['Резерв / подушка', 'На случай непредвиденного'],
+  etf: ['ETF-инвестиции', 'Долгосрочный рост'],
+  trading: ['Трейдинг-депозит', 'Рабочий капитал для сделок'],
+  personal: ['Личное', 'Траты и хобби'],
+};
+
+function renderFinanceDetail() {
+  const s = Store.getState();
+  document.getElementById('fin-balance').textContent = fmtMoney(Store.getCapitalTotal());
+
+  const recent = Store.getTransactionsSince(7);
+  const income7 = recent.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+  const expense7 = recent.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+  document.getElementById('fin-income-7d').textContent = fmtMoney(income7);
+  document.getElementById('fin-expense-7d').textContent = fmtMoney(expense7);
+
+  const alloc = document.getElementById('fin-allocation');
+  alloc.innerHTML = Object.keys(CAPITAL_LABELS).map(key => `
+    <div class="alloc-row" data-alloc="${key}">
+      <div>
+        <div class="alloc-label">${CAPITAL_LABELS[key][0]}</div>
+        <div class="alloc-sub">${CAPITAL_LABELS[key][1]}</div>
+      </div>
+      <div class="alloc-amount">${fmtMoney(s.capital[key])}</div>
+    </div>
+  `).join('');
+
+  const hist = document.getElementById('fin-history');
+  hist.innerHTML = s.transactions.slice(0, 20).map(t => `
+    <li>
+      <span class="item-text">${escapeHtml(t.category)}${t.note ? ' · ' + escapeHtml(t.note) : ''}</span>
+      <span class="${t.type === 'income' ? 'accent-teal-text' : 'muted'}">${t.type === 'income' ? '+' : '−'}${Math.round(t.amount)} ₽</span>
+    </li>
+  `).join('') || '<li class="muted">Пока нет операций</li>';
+}
+Router.register('finance-detail', renderFinanceDetail);
+
+document.getElementById('screen-finance-detail').addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('[data-action="add-transaction"]')) openTransactionSheet();
+  const allocRow = t.closest('[data-alloc]');
+  if (allocRow) openAllocationSheet(allocRow.dataset.alloc);
+});
+
+function openTransactionSheet() {
+  const cats = { expense: ['Продукты', 'Кофе', 'Транспорт', 'Подписка', 'Другое'], income: ['Работа', 'Агентство', 'Трейдинг', 'Другое'] };
+  let type = 'expense';
+  let selected = cats.expense[0];
+  const render = () => `
+    <h3>Новая операция</h3>
+    <div class="chip-row">
+      <span class="chip ${type === 'expense' ? 'selected' : ''}" data-type="expense">Расход</span>
+      <span class="chip ${type === 'income' ? 'selected' : ''}" data-type="income">Доход</span>
+    </div>
+    <input class="field" id="sheet-amt" type="number" inputmode="numeric" placeholder="Сумма, ₽">
+    <div class="chip-row" id="sheet-cats">
+      ${cats[type].map((c, i) => `<span class="chip ${c === selected ? 'selected' : ''}" data-cat="${c}">${c}</span>`).join('')}
+    </div>
+    <button class="primary-btn" id="sheet-tx-save">Добавить</button>
+  `;
+  const mount = root => {
+    root.querySelectorAll('[data-type]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        type = chip.dataset.type;
+        selected = cats[type][0];
+        root.innerHTML = render();
+        mount(root);
+      });
+    });
+    root.querySelectorAll('[data-cat]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        root.querySelectorAll('[data-cat]').forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        selected = chip.dataset.cat;
+      });
+    });
+    root.querySelector('#sheet-tx-save').addEventListener('click', () => {
+      const amt = parseFloat(root.querySelector('#sheet-amt').value);
+      if (!isNaN(amt) && amt > 0) {
+        Store.addTransaction(amt, type, selected);
+        renderFinanceDetail();
+        renderOverview();
+        Sheet.close();
+      }
+    });
+  };
+  Sheet.open(render(), mount);
+}
+
+function openAllocationSheet(key) {
+  const s = Store.getState();
+  Sheet.open(`
+    <h3>${CAPITAL_LABELS[key][0]}</h3>
+    <input class="field" id="sheet-alloc-val" type="number" inputmode="numeric" value="${s.capital[key]}">
+    <button class="primary-btn" id="sheet-alloc-save">Сохранить</button>
+  `, root => {
+    root.querySelector('#sheet-alloc-save').addEventListener('click', () => {
+      const val = parseFloat(root.querySelector('#sheet-alloc-val').value);
+      if (!isNaN(val)) { Store.setCapital(key, val); renderFinanceDetail(); Sheet.close(); }
+    });
+  });
+}
+
+// ==========================================================
+// WORKOUT DETAIL
+// ==========================================================
+const WEEK_DAYS = [['mon','Пн'],['tue','Вт'],['wed','Ср'],['thu','Чт'],['fri','Пт'],['sat','Сб'],['sun','Вс']];
+
+function renderWorkoutDetail() {
+  const s = Store.getState();
+  document.getElementById('wk-minutes').textContent = s.workout.minutes;
+  document.getElementById('wk-bar').style.width = Math.min(100, (s.workout.minutes / s.workout.goal) * 100) + '%';
+
+  const plan = document.getElementById('wk-plan');
+  plan.innerHTML = WEEK_DAYS.map(([key, label]) => `
+    <div class="plan-row">
+      <span class="plan-day">${label}</span>
+      <input class="field" data-plan-day="${key}" placeholder="День отдыха" value="${escapeHtml(s.workoutPlan[key] || '')}">
+    </div>
+  `).join('');
+}
+Router.register('workout-detail', renderWorkoutDetail);
+
+document.getElementById('screen-workout-detail').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.wk) { Store.addWorkoutMinutes(parseInt(t.dataset.wk, 10)); renderWorkoutDetail(); renderOverview(); }
+  if (t.closest('[data-action="ai-tip-stub"]')) {
+    Sheet.open(`<h3>ИИ-советы</h3><p class="muted small">Эта функция появится, когда бэкенд будет подключён к нейросети. Пока это заглушка.</p>`);
+  }
+});
+document.getElementById('screen-workout-detail').addEventListener('change', e => {
+  if (e.target.dataset.planDay) {
+    Store.setWorkoutPlanDay(e.target.dataset.planDay, e.target.value);
+  }
+});
+
+// ==========================================================
+// NUTRITION DETAIL
+// ==========================================================
+const MEALS = [['breakfast','Завтрак'],['lunch','Обед'],['dinner','Ужин'],['snack','Перекус']];
+
+function renderNutritionDetail() {
+  const s = Store.getState();
+  document.getElementById('nu-goal-label').textContent = `цель ${s.nutrition.goal} ккал`;
+  document.getElementById('nu-eaten').textContent = s.nutrition.eaten;
+  document.getElementById('nu-bar').style.width = Math.min(100, (s.nutrition.eaten / s.nutrition.goal) * 100) + '%';
+
+  const plan = document.getElementById('nu-plan');
+  plan.innerHTML = MEALS.map(([key, label]) => `
+    <div class="plan-row">
+      <span class="plan-day">${label}</span>
+      <input class="field" data-meal="${key}" placeholder="Что съесть" value="${escapeHtml(s.mealPlan[key] || '')}">
+    </div>
+  `).join('');
+}
+Router.register('nutrition-detail', renderNutritionDetail);
+
+document.getElementById('screen-nutrition-detail').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.nu) {
+    const s = Store.getState();
+    Store.setNutrition(Math.max(0, s.nutrition.eaten + parseInt(t.dataset.nu, 10)));
+    renderNutritionDetail(); renderToday(); renderOverview();
+  }
+  if (t.closest('[data-action="edit-cal-goal"]')) {
+    const s = Store.getState();
+    Sheet.open(`
+      <h3>Цель по калориям</h3>
+      <input class="field" id="sheet-cal-goal" type="number" inputmode="numeric" value="${s.nutrition.goal}">
+      <button class="primary-btn" id="sheet-cal-goal-save">Сохранить</button>
+    `, root => {
+      root.querySelector('#sheet-cal-goal-save').addEventListener('click', () => {
+        const val = parseInt(root.querySelector('#sheet-cal-goal').value, 10);
+        if (!isNaN(val) && val > 0) { Store.setNutritionGoal(val); renderNutritionDetail(); renderToday(); Sheet.close(); }
+      });
+    });
+  }
+  if (t.closest('[data-action="ai-meal-stub"]')) {
+    Sheet.open(`<h3>ИИ-план питания</h3><p class="muted small">Появится, когда бэкенд будет подключён к нейросети. Пока план заполняется вручную.</p>`);
+  }
+});
+document.getElementById('screen-nutrition-detail').addEventListener('change', e => {
+  if (e.target.dataset.meal) {
+    Store.setMealPlan(e.target.dataset.meal, e.target.value);
+  }
+});
+
+// --- food photo (camera) stub ---
+document.getElementById('food-photo-btn').addEventListener('click', () => {
+  document.getElementById('food-photo-input').click();
+});
+document.getElementById('food-photo-input').addEventListener('change', e => {
+  if (!e.target.files || !e.target.files[0]) return;
+  Sheet.open(`
+    <h3>Фото получено</h3>
+    <p class="muted small">Распознавание калорий по фото ещё не подключено — для этого нужен бэкенд с ИИ-моделью, которая умеет анализировать изображения. Пока можно ввести калории вручную.</p>
+  `);
+  e.target.value = '';
+});
+
+// ==========================================================
 // HISTORY
 // ==========================================================
 let historyCursor = new Date();
@@ -274,12 +433,11 @@ function renderHistory() {
   document.getElementById('history-month-label').textContent = `${MONTHS[m]} ${y}`;
 
   const snapshots = Store.getMonthSnapshots(y, m);
-  const firstDow = (new Date(y, m, 1).getDay() + 6) % 7; // Monday-first
+  const firstDow = (new Date(y, m, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(y, m + 1, 0).getDate();
 
   const grid = document.getElementById('history-grid');
   let html = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => `<div class="cal-dow">${d}</div>`).join('');
-
   for (let i = 0; i < firstDow; i++) html += `<div class="cal-day empty"></div>`;
 
   for (let day = 1; day <= daysInMonth; day++) {
@@ -311,18 +469,11 @@ Router.register('history', renderHistory);
 function renderDayDetail() {
   const title = document.getElementById('history-day-title');
   const list = document.getElementById('history-day-list');
-  if (!selectedDay) {
-    title.textContent = 'Выберите день';
-    list.innerHTML = '';
-    return;
-  }
+  if (!selectedDay) { title.textContent = 'Выберите день'; list.innerHTML = ''; return; }
   const snap = Store.getDaySnapshot(selectedDay);
   const [y, m, d] = selectedDay.split('-');
   title.textContent = `${d} ${MONTHS[parseInt(m, 10) - 1].toLowerCase()}`;
-  if (!snap) {
-    list.innerHTML = '<li class="muted">Нет данных за этот день</li>';
-    return;
-  }
+  if (!snap) { list.innerHTML = '<li class="muted">Нет данных за этот день</li>'; return; }
   list.innerHTML = `
     <li><span class="item-text">Привычки выполнены</span><span class="muted">${snap.pct}%</span></li>
     <li><span class="item-text">Калории</span><span class="muted">${snap.calories} ккал</span></li>
@@ -361,6 +512,13 @@ function renderAnalytics() {
 }
 Router.register('analytics', renderAnalytics);
 
+document.getElementById('screen-analytics').addEventListener('click', e => {
+  const card = e.target.closest('[data-action="chart-detail"]');
+  if (card) {
+    Sheet.open(`<h3>Подробная аналитика</h3><p class="muted small">Детальный разбор по дням появится здесь в следующей версии. Кнопка уже рабочая — сейчас просто заглушка.</p>`);
+  }
+});
+
 // ==========================================================
 // ASSISTANT
 // ==========================================================
@@ -388,7 +546,6 @@ document.getElementById('chat-form').addEventListener('submit', e => {
   if (!val) return;
   addMessage('user', val);
   input.value = '';
-  // Placeholder response — replace with real backend call when ready.
   setTimeout(() => addMessage('bot', 'Пока отвечаю заглушкой — подключение к настоящей модели будет добавлено отдельно.'), 300);
 });
 
