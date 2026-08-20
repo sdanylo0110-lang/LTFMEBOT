@@ -12,31 +12,20 @@
 const Router = (() => {
   let current = 'today';
   const renderers = {};
-
   function register(name, fn) { renderers[name] = fn; }
-
   function go(name) {
     current = name;
-    document.querySelectorAll('.screen').forEach(s => {
-      s.classList.toggle('active', s.dataset.screen === name);
-    });
-    document.querySelectorAll('.tab-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.tab === name);
-    });
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     if (renderers[name]) renderers[name]();
     window.scrollTo(0, 0);
   }
-
   return { register, go, current: () => current };
 })();
 
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => Router.go(btn.dataset.tab));
-});
-
+document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => Router.go(btn.dataset.tab)));
 document.getElementById('app').addEventListener('click', e => {
-  const back = e.target.closest('[data-action="back-to-overview"]');
-  if (back) Router.go('overview');
+  if (e.target.closest('[data-action="back-to-overview"]')) Router.go('overview');
 });
 
 // ---- Bottom sheet ----
@@ -44,37 +33,85 @@ const Sheet = (() => {
   const backdrop = document.getElementById('sheet-backdrop');
   const sheet = document.getElementById('sheet');
   const content = document.getElementById('sheet-content');
-
   function open(html, onMount) {
     content.innerHTML = html;
     backdrop.classList.add('open');
     sheet.classList.add('open');
     if (onMount) onMount(content);
   }
-  function close() {
-    backdrop.classList.remove('open');
-    sheet.classList.remove('open');
-  }
+  function close() { backdrop.classList.remove('open'); sheet.classList.remove('open'); }
   backdrop.addEventListener('click', close);
-
   return { open, close };
 })();
 
-// ---- Date formatting ----
+// ---- Formatting ----
 const DOW = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-function formatToday() {
-  const d = new Date();
-  return `${DOW[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`;
+function formatToday() { const d = new Date(); return `${DOW[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`; }
+function formatTime(ts) { const d = new Date(ts); return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0'); }
+function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
+
+// ==========================================================
+// CURRENCY — client-side conversion only. All amounts are
+// stored internally in RUB; display converts on the fly using
+// a public, keyless FX API, cached ~12h in localStorage so we
+// don't hammer the endpoint on every render.
+// ==========================================================
+const CUR_SYMBOL = { RUB: '₽', USD: '$', EUR: '€', UAH: '₴' };
+const Currency = (() => {
+  const FRESH_MS = 12 * 60 * 60 * 1000;
+
+  async function ensureRates() {
+    const cached = Store.getFxCache();
+    if (cached && Date.now() - cached.fetchedAt < FRESH_MS) return cached;
+    try {
+      const r = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/rub.json');
+      const data = await r.json();
+      const rates = { RUB: 1, USD: data.rub.usd, EUR: data.rub.eur, UAH: data.rub.uah };
+      Store.setFxCache({ base: 'RUB', rates });
+      return Store.getFxCache();
+    } catch (e) {
+      try {
+        const r2 = await fetch('https://open.er-api.com/v6/latest/RUB');
+        const data2 = await r2.json();
+        const rates = { RUB: 1, USD: data2.rates.USD, EUR: data2.rates.EUR, UAH: data2.rates.UAH };
+        Store.setFxCache({ base: 'RUB', rates });
+        return Store.getFxCache();
+      } catch (e2) {
+        console.warn('FX fetch failed, using stale/fallback rates', e2);
+        return cached || { rates: { RUB: 1, USD: 0.0105, EUR: 0.0097, UAH: 0.44 }, fetchedAt: 0 };
+      }
+    }
+  }
+
+  function toDisplay(amountRUB, currency) {
+    const cache = Store.getFxCache();
+    const rate = cache && cache.rates[currency] != null ? cache.rates[currency] : (currency === 'RUB' ? 1 : null);
+    if (rate == null) return amountRUB; // rates not loaded yet — show RUB value as-is
+    return amountRUB * rate;
+  }
+
+  function toRUB(amountInCurrency, currency) {
+    const cache = Store.getFxCache();
+    const rate = cache && cache.rates[currency] != null ? cache.rates[currency] : (currency === 'RUB' ? 1 : null);
+    if (!rate) return amountInCurrency;
+    return amountInCurrency / rate;
+  }
+
+  return { ensureRates, toDisplay, toRUB };
+})();
+
+function fmtMoney(amountRUB) {
+  const cur = Store.getState().settings.currency;
+  const val = Currency.toDisplay(amountRUB, cur);
+  return Math.round(val).toLocaleString('ru-RU') + ' ' + CUR_SYMBOL[cur];
 }
-function fmtMoney(n) { return Math.round(n).toLocaleString('ru-RU') + ' ₽'; }
 
 // ==========================================================
 // TODAY
 // ==========================================================
 function renderToday() {
   document.getElementById('today-date').textContent = formatToday();
-
   const s = Store.getState();
   const total = s.habits.length;
   const done = s.habits.filter(h => h.done).length;
@@ -84,7 +121,6 @@ function renderToday() {
   const ring = document.getElementById('today-ring');
   const circumference = 327;
   ring.style.strokeDashoffset = circumference - (pct / 100) * circumference;
-
   document.getElementById('today-habit-count').textContent = `${done} из ${total}`;
 
   const list = document.getElementById('today-habit-list');
@@ -108,11 +144,10 @@ function renderWaterCard() {
   const liters = (s.water.count * s.water.mlPerGlass / 1000).toFixed(1);
   document.getElementById('today-water-val').textContent = `${s.water.count} / ${s.water.goal} стак. · ${liters} л`;
   document.getElementById('today-water-bar').style.width = Math.min(100, (s.water.count / s.water.goal) * 100) + '%';
-
   const row = document.getElementById('today-cup-row');
   let html = '';
   for (let i = 1; i <= s.water.goal; i++) {
-    html += `<div class="cup ${i <= s.water.count ? 'filled' : ''}" data-set-water="${i}">${i <= s.water.count ? '💧' : ''}</div>`;
+    html += `<div class="cup ${i <= s.water.count ? 'filled' : ''}" data-set-water="${i}"></div>`;
   }
   row.innerHTML = html;
 }
@@ -126,7 +161,6 @@ document.getElementById('screen-today').addEventListener('click', e => {
   if (t.dataset.setWater) {
     const clicked = parseInt(t.dataset.setWater, 10);
     const s = Store.getState();
-    // tapping the already-filled top cup removes it; otherwise fill up to it
     Store.setWater(clicked === s.water.count ? clicked - 1 : clicked);
     renderWaterCard();
   }
@@ -158,8 +192,7 @@ function renderOverview() {
   const calPct = Math.min(100, (s.nutrition.eaten / s.nutrition.goal) * 100);
   const circumference = 157;
   document.getElementById('ov-cal-ring').style.strokeDashoffset = circumference - (calPct / 100) * circumference;
-  const left = Math.max(0, s.nutrition.goal - s.nutrition.eaten);
-  document.getElementById('ov-cal-left').textContent = `Осталось ${left} ккал`;
+  document.getElementById('ov-cal-left').textContent = `Осталось ${Math.max(0, s.nutrition.goal - s.nutrition.eaten)} ккал`;
 
   document.getElementById('ov-workout').textContent = s.workout.minutes;
   document.getElementById('ov-workout-bar').style.width = Math.min(100, (s.workout.minutes / s.workout.goal) * 100) + '%';
@@ -169,14 +202,12 @@ function renderOverview() {
   document.getElementById('ov-spend').textContent = fmtMoney(spendTotal);
   document.getElementById('ov-spend-bar').style.width = Math.min(100, (spendTotal / 2000) * 100) + '%';
   document.getElementById('ov-spend-list').innerHTML = todaySpend.slice(0, 3).map(t => `
-    <li><span class="item-text">${escapeHtml(t.category)}</span><span class="muted">−${Math.round(t.amount)} ₽</span></li>
+    <li><span class="item-text">${escapeHtml(t.category)}</span><span class="muted">−${fmtMoney(t.amount)}</span></li>
   `).join('') || '<li class="muted">Пока нет трат</li>';
 
-  const activeTasks = s.tasks.filter(t => !t.done);
-  document.getElementById('ov-tasks').textContent = activeTasks.length;
-
+  document.getElementById('ov-tasks').textContent = s.tasks.filter(t => !t.done).length;
   document.getElementById('ov-notes-list').innerHTML = s.notes.slice(0, 2).map(n => `
-    <li class="item-text">${escapeHtml(n.text)}</li>
+    <li class="item-text">${escapeHtml(n.text.slice(0, 40))}${n.text.length > 40 ? '…' : ''}</li>
   `).join('') || '<li class="muted">Пока нет заметок</li>';
 }
 Router.register('overview', renderOverview);
@@ -186,6 +217,8 @@ document.getElementById('screen-overview').addEventListener('click', e => {
   if (t.closest('[data-action="open-nutrition-detail"]')) Router.go('nutrition-detail');
   if (t.closest('[data-action="open-workout-detail"]')) Router.go('workout-detail');
   if (t.closest('[data-action="open-finance-detail"]')) Router.go('finance-detail');
+  if (t.closest('[data-action="open-tasks-detail"]')) Router.go('tasks-detail');
+  if (t.closest('[data-action="open-notes-detail"]')) Router.go('notes-detail');
   if (t.closest('[data-action="add-task"]')) { e.stopPropagation(); openAddTaskSheet(); }
   if (t.closest('[data-action="add-note"]')) { e.stopPropagation(); openAddNoteSheet(); }
 });
@@ -193,25 +226,142 @@ document.getElementById('screen-overview').addEventListener('click', e => {
 function openAddTaskSheet() {
   Sheet.open(`
     <h3>Новая задача</h3>
-    <input class="field" id="sheet-task-text" placeholder="Что нужно сделать">
+    <input class="field" id="sheet-task-text" placeholder="Что нужно сделать" autofocus>
     <button class="primary-btn" id="sheet-task-save">Добавить</button>
   `, root => {
     root.querySelector('#sheet-task-save').addEventListener('click', () => {
       const val = root.querySelector('#sheet-task-text').value.trim();
-      if (val) { Store.addTask(val); renderOverview(); Sheet.close(); }
+      if (val) { Store.addTask(val); renderOverview(); if (Router.current() === 'tasks-detail') renderTasksDetail(); Sheet.close(); }
     });
   });
 }
 
 function openAddNoteSheet() {
+  const s = Store.getState();
+  let folder = (Router.current() === 'notes-detail' && window.__notesSelectedFolder) || s.noteFolders[0];
   Sheet.open(`
     <h3>Новая заметка</h3>
-    <input class="field" id="sheet-note-text" placeholder="Мысль или запись">
+    <div class="chip-row" id="sheet-note-folders">
+      ${s.noteFolders.map(f => `<span class="chip ${f === folder ? 'selected' : ''}" data-folder="${escapeHtml(f)}">${escapeHtml(f)}</span>`).join('')}
+    </div>
+    <textarea class="field" id="sheet-note-text" placeholder="Мысль или запись" rows="5" style="resize:vertical" autofocus></textarea>
     <button class="primary-btn" id="sheet-note-save">Сохранить</button>
   `, root => {
+    root.querySelectorAll('[data-folder]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        folder = chip.dataset.folder;
+        root.querySelectorAll('[data-folder]').forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+      });
+    });
     root.querySelector('#sheet-note-save').addEventListener('click', () => {
       const val = root.querySelector('#sheet-note-text').value.trim();
-      if (val) { Store.addNote(val); renderOverview(); Sheet.close(); }
+      if (val) {
+        Store.addNote(val, folder);
+        renderOverview();
+        if (Router.current() === 'notes-detail') renderNotesDetail();
+        Sheet.close();
+      }
+    });
+  });
+}
+
+// ==========================================================
+// TASKS DETAIL
+// ==========================================================
+function renderTasksDetail() {
+  const s = Store.getState();
+  const active = s.tasks.filter(t => !t.done);
+  const done = s.tasks.filter(t => t.done);
+  document.getElementById('tasks-active-list').innerHTML = active.map(t => `
+    <li>
+      <span class="check" data-toggle-task="${t.id}"></span>
+      <span class="item-text">${escapeHtml(t.text)}</span>
+      <span class="item-del" data-del-task="${t.id}">✕</span>
+    </li>
+  `).join('') || '<li class="muted">Нет активных задач</li>';
+  document.getElementById('tasks-done-label').style.display = done.length ? 'block' : 'none';
+  document.getElementById('tasks-done-list').innerHTML = done.map(t => `
+    <li>
+      <span class="check done" data-toggle-task="${t.id}"></span>
+      <span class="item-text done">${escapeHtml(t.text)}</span>
+      <span class="item-del" data-del-task="${t.id}">✕</span>
+    </li>
+  `).join('');
+}
+Router.register('tasks-detail', renderTasksDetail);
+
+document.getElementById('screen-tasks-detail').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.toggleTask) { Store.toggleTask(t.dataset.toggleTask); renderTasksDetail(); renderOverview(); }
+  if (t.dataset.delTask) { Store.removeTask(t.dataset.delTask); renderTasksDetail(); renderOverview(); }
+  if (t.closest('[data-action="add-task"]')) openAddTaskSheet();
+});
+
+// ==========================================================
+// NOTES DETAIL
+// ==========================================================
+window.__notesSelectedFolder = null;
+function renderNotesDetail() {
+  const s = Store.getState();
+  if (!window.__notesSelectedFolder || !s.noteFolders.includes(window.__notesSelectedFolder)) {
+    window.__notesSelectedFolder = s.noteFolders[0];
+  }
+  const tabs = document.getElementById('notes-folder-tabs');
+  tabs.innerHTML = s.noteFolders.map(f => `
+    <div class="folder-tab ${f === window.__notesSelectedFolder ? 'selected' : ''}" data-select-folder="${escapeHtml(f)}">${escapeHtml(f)}</div>
+  `).join('') + `<div class="folder-tab add-tab" data-add-folder>+ Папка</div>`;
+
+  const notes = s.notes.filter(n => n.folder === window.__notesSelectedFolder).sort((a, b) => b.ts - a.ts);
+  const list = document.getElementById('notes-list');
+  list.innerHTML = notes.map(n => `
+    <div class="note-card" data-edit-note="${n.id}">
+      <div class="note-card-text">${escapeHtml(n.text)}</div>
+      <div class="note-card-time">${new Date(n.ts).toLocaleDateString('ru-RU')} · ${formatTime(n.ts)}</div>
+    </div>
+  `).join('') || '<div class="note-empty">В этой папке пока пусто</div>';
+}
+Router.register('notes-detail', renderNotesDetail);
+
+document.getElementById('screen-notes-detail').addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('[data-action="add-note"]')) openAddNoteSheet();
+  const folderTab = t.closest('[data-select-folder]');
+  if (folderTab) { window.__notesSelectedFolder = folderTab.dataset.selectFolder; renderNotesDetail(); }
+  if (t.closest('[data-add-folder]')) openAddFolderSheet();
+  const noteCard = t.closest('[data-edit-note]');
+  if (noteCard) openEditNoteSheet(noteCard.dataset.editNote);
+});
+
+function openAddFolderSheet() {
+  Sheet.open(`
+    <h3>Новая папка</h3>
+    <input class="field" id="sheet-folder-name" placeholder="Название папки" autofocus>
+    <button class="primary-btn" id="sheet-folder-save">Создать</button>
+  `, root => {
+    root.querySelector('#sheet-folder-save').addEventListener('click', () => {
+      const val = root.querySelector('#sheet-folder-name').value.trim();
+      if (val) { Store.addNoteFolder(val); window.__notesSelectedFolder = val; renderNotesDetail(); Sheet.close(); }
+    });
+  });
+}
+
+function openEditNoteSheet(id) {
+  const s = Store.getState();
+  const note = s.notes.find(n => n.id === id);
+  if (!note) return;
+  Sheet.open(`
+    <h3>Заметка</h3>
+    <textarea class="field" id="sheet-edit-note-text" rows="6" style="resize:vertical">${escapeHtml(note.text)}</textarea>
+    <button class="primary-btn" id="sheet-edit-note-save">Сохранить</button>
+    <button class="ghost-btn" id="sheet-edit-note-del">Удалить заметку</button>
+  `, root => {
+    root.querySelector('#sheet-edit-note-save').addEventListener('click', () => {
+      const val = root.querySelector('#sheet-edit-note-text').value.trim();
+      if (val) { Store.editNote(id, val); renderNotesDetail(); Sheet.close(); }
+    });
+    root.querySelector('#sheet-edit-note-del').addEventListener('click', () => {
+      Store.removeNote(id); renderNotesDetail(); renderOverview(); Sheet.close();
     });
   });
 }
@@ -219,15 +369,9 @@ function openAddNoteSheet() {
 // ==========================================================
 // FINANCE DETAIL
 // ==========================================================
-const CAPITAL_LABELS = {
-  reserve: ['Резерв / подушка', 'На случай непредвиденного'],
-  etf: ['ETF-инвестиции', 'Долгосрочный рост'],
-  trading: ['Трейдинг-депозит', 'Рабочий капитал для сделок'],
-  personal: ['Личное', 'Траты и хобби'],
-};
-
 function renderFinanceDetail() {
   const s = Store.getState();
+  renderCurrencyRow();
   document.getElementById('fin-balance').textContent = fmtMoney(Store.getCapitalTotal());
 
   const recent = Store.getTransactionsSince(7);
@@ -237,88 +381,130 @@ function renderFinanceDetail() {
   document.getElementById('fin-expense-7d').textContent = fmtMoney(expense7);
 
   const alloc = document.getElementById('fin-allocation');
-  alloc.innerHTML = Object.keys(CAPITAL_LABELS).map(key => `
-    <div class="alloc-row" data-alloc="${key}">
-      <div>
-        <div class="alloc-label">${CAPITAL_LABELS[key][0]}</div>
-        <div class="alloc-sub">${CAPITAL_LABELS[key][1]}</div>
+  alloc.innerHTML = s.capital.map(c => `
+    <div class="alloc-row-wrap">
+      <div class="alloc-row" data-alloc="${c.id}">
+        <div><div class="alloc-label">${escapeHtml(c.label)}</div></div>
+        <div class="alloc-amount">${fmtMoney(c.amount)}</div>
       </div>
-      <div class="alloc-amount">${fmtMoney(s.capital[key])}</div>
+      <span class="alloc-del" data-del-capital="${c.id}">✕</span>
     </div>
   `).join('');
+
+  const tipBox = document.getElementById('fin-tip-box');
+  if (recent.length) {
+    if (expense7 > income7 && income7 > 0) {
+      tipBox.textContent = `За 7 дней расходы (${fmtMoney(expense7)}) превысили доходы (${fmtMoney(income7)}). Стоит присмотреться, на что уходит больше всего.`;
+    } else if (income7 > 0) {
+      tipBox.textContent = `За 7 дней доход превышает расход на ${fmtMoney(income7 - expense7)} — хорошая динамика, часть можно отправить в резерв или инвестиции.`;
+    } else {
+      tipBox.textContent = 'Пока в основном расходы без дохода за 7 дней — добавьте операции, чтобы видеть баланс.';
+    }
+  }
 
   const hist = document.getElementById('fin-history');
   hist.innerHTML = s.transactions.slice(0, 20).map(t => `
     <li>
       <span class="item-text">${escapeHtml(t.category)}${t.note ? ' · ' + escapeHtml(t.note) : ''}</span>
-      <span class="${t.type === 'income' ? 'accent-teal-text' : 'muted'}">${t.type === 'income' ? '+' : '−'}${Math.round(t.amount)} ₽</span>
+      <span class="${t.type === 'income' ? 'accent-teal-text' : 'muted'}">${t.type === 'income' ? '+' : '−'}${fmtMoney(t.amount)}</span>
     </li>
   `).join('') || '<li class="muted">Пока нет операций</li>';
 }
 Router.register('finance-detail', renderFinanceDetail);
+
+function renderCurrencyRow() {
+  const s = Store.getState();
+  const row = document.getElementById('fin-currency-row');
+  row.innerHTML = ['RUB', 'USD', 'EUR', 'UAH'].map(c => `
+    <div class="currency-chip ${s.settings.currency === c ? 'selected' : ''}" data-currency="${c}">${CUR_SYMBOL[c]} ${c}</div>
+  `).join('');
+  const hint = document.getElementById('fin-fx-hint');
+  const cache = Store.getFxCache();
+  hint.textContent = cache ? `Курс обновлён ${new Date(cache.fetchedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : 'Курс загружается…';
+}
 
 document.getElementById('screen-finance-detail').addEventListener('click', e => {
   const t = e.target;
   if (t.closest('[data-action="add-transaction"]')) openTransactionSheet();
   const allocRow = t.closest('[data-alloc]');
   if (allocRow) openAllocationSheet(allocRow.dataset.alloc);
+  if (t.dataset.delCapital) { Store.removeCapitalCategory(t.dataset.delCapital); renderFinanceDetail(); }
+  if (t.closest('[data-action="add-capital-category"]')) openAddCapitalCategorySheet();
+  if (t.closest('[data-action="fin-tip-stub"]')) {
+    Sheet.open(`<h3>ИИ-советы по финансам</h3><p class="muted small">Персональные рекомендации появятся, когда бэкенд будет подключён к нейросети. Пока показываются базовые наблюдения по вашим операциям.</p>`);
+  }
+  const curChip = t.closest('[data-currency]');
+  if (curChip) {
+    Store.setCurrency(curChip.dataset.currency);
+    renderFinanceDetail();
+    Currency.ensureRates().then(() => renderFinanceDetail());
+  }
 });
 
 function openTransactionSheet() {
   const cats = { expense: ['Продукты', 'Кофе', 'Транспорт', 'Подписка', 'Другое'], income: ['Работа', 'Агентство', 'Трейдинг', 'Другое'] };
   let type = 'expense';
   let selected = cats.expense[0];
+  const cur = Store.getState().settings.currency;
   const render = () => `
     <h3>Новая операция</h3>
     <div class="chip-row">
       <span class="chip ${type === 'expense' ? 'selected' : ''}" data-type="expense">Расход</span>
       <span class="chip ${type === 'income' ? 'selected' : ''}" data-type="income">Доход</span>
     </div>
-    <input class="field" id="sheet-amt" type="number" inputmode="numeric" placeholder="Сумма, ₽">
+    <input class="field" id="sheet-amt" type="number" inputmode="numeric" placeholder="Сумма, ${CUR_SYMBOL[cur]}">
     <div class="chip-row" id="sheet-cats">
-      ${cats[type].map((c, i) => `<span class="chip ${c === selected ? 'selected' : ''}" data-cat="${c}">${c}</span>`).join('')}
+      ${cats[type].map(c => `<span class="chip ${c === selected ? 'selected' : ''}" data-cat="${c}">${c}</span>`).join('')}
     </div>
     <button class="primary-btn" id="sheet-tx-save">Добавить</button>
   `;
   const mount = root => {
-    root.querySelectorAll('[data-type]').forEach(chip => {
-      chip.addEventListener('click', () => {
-        type = chip.dataset.type;
-        selected = cats[type][0];
-        root.innerHTML = render();
-        mount(root);
-      });
-    });
-    root.querySelectorAll('[data-cat]').forEach(chip => {
-      chip.addEventListener('click', () => {
-        root.querySelectorAll('[data-cat]').forEach(c => c.classList.remove('selected'));
-        chip.classList.add('selected');
-        selected = chip.dataset.cat;
-      });
-    });
+    root.querySelectorAll('[data-type]').forEach(chip => chip.addEventListener('click', () => {
+      type = chip.dataset.type; selected = cats[type][0]; root.innerHTML = render(); mount(root);
+    }));
+    root.querySelectorAll('[data-cat]').forEach(chip => chip.addEventListener('click', () => {
+      root.querySelectorAll('[data-cat]').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected'); selected = chip.dataset.cat;
+    }));
     root.querySelector('#sheet-tx-save').addEventListener('click', () => {
       const amt = parseFloat(root.querySelector('#sheet-amt').value);
       if (!isNaN(amt) && amt > 0) {
-        Store.addTransaction(amt, type, selected);
-        renderFinanceDetail();
-        renderOverview();
-        Sheet.close();
+        const amtRUB = Currency.toRUB(amt, cur);
+        Store.addTransaction(amtRUB, type, selected);
+        renderFinanceDetail(); renderOverview(); Sheet.close();
       }
     });
   };
   Sheet.open(render(), mount);
 }
 
-function openAllocationSheet(key) {
+function openAllocationSheet(id) {
   const s = Store.getState();
+  const cat = s.capital.find(c => c.id === id);
+  if (!cat) return;
+  const cur = s.settings.currency;
+  const displayVal = Math.round(Currency.toDisplay(cat.amount, cur));
   Sheet.open(`
-    <h3>${CAPITAL_LABELS[key][0]}</h3>
-    <input class="field" id="sheet-alloc-val" type="number" inputmode="numeric" value="${s.capital[key]}">
+    <h3>${escapeHtml(cat.label)}</h3>
+    <input class="field" id="sheet-alloc-val" type="number" inputmode="numeric" value="${displayVal}">
     <button class="primary-btn" id="sheet-alloc-save">Сохранить</button>
   `, root => {
     root.querySelector('#sheet-alloc-save').addEventListener('click', () => {
       const val = parseFloat(root.querySelector('#sheet-alloc-val').value);
-      if (!isNaN(val)) { Store.setCapital(key, val); renderFinanceDetail(); Sheet.close(); }
+      if (!isNaN(val)) { Store.setCapitalAmount(id, Currency.toRUB(val, cur)); renderFinanceDetail(); Sheet.close(); }
+    });
+  });
+}
+
+function openAddCapitalCategorySheet() {
+  Sheet.open(`
+    <h3>Новая категория</h3>
+    <input class="field" id="sheet-cap-name" placeholder="Например, Путешествия" autofocus>
+    <button class="primary-btn" id="sheet-cap-save">Добавить</button>
+  `, root => {
+    root.querySelector('#sheet-cap-save').addEventListener('click', () => {
+      const val = root.querySelector('#sheet-cap-name').value.trim();
+      if (val) { Store.addCapitalCategory(val); renderFinanceDetail(); Sheet.close(); }
     });
   });
 }
@@ -326,13 +512,12 @@ function openAllocationSheet(key) {
 // ==========================================================
 // WORKOUT DETAIL
 // ==========================================================
-const WEEK_DAYS = [['mon','Пн'],['tue','Вт'],['wed','Ср'],['thu','Чт'],['fri','Пт'],['sat','Сб'],['sun','Вс']];
+const WEEK_DAYS = [['mon', 'Пн'], ['tue', 'Вт'], ['wed', 'Ср'], ['thu', 'Чт'], ['fri', 'Пт'], ['sat', 'Сб'], ['sun', 'Вс']];
 
 function renderWorkoutDetail() {
   const s = Store.getState();
   document.getElementById('wk-minutes').textContent = s.workout.minutes;
   document.getElementById('wk-bar').style.width = Math.min(100, (s.workout.minutes / s.workout.goal) * 100) + '%';
-
   const plan = document.getElementById('wk-plan');
   plan.innerHTML = WEEK_DAYS.map(([key, label]) => `
     <div class="plan-row">
@@ -340,6 +525,8 @@ function renderWorkoutDetail() {
       <input class="field" data-plan-day="${key}" placeholder="День отдыха" value="${escapeHtml(s.workoutPlan[key] || '')}">
     </div>
   `).join('');
+  document.getElementById('wk-height').value = s.profile.heightCm || '';
+  document.getElementById('wk-weight').value = s.profile.weightKg || '';
 }
 Router.register('workout-detail', renderWorkoutDetail);
 
@@ -351,15 +538,24 @@ document.getElementById('screen-workout-detail').addEventListener('click', e => 
   }
 });
 document.getElementById('screen-workout-detail').addEventListener('change', e => {
-  if (e.target.dataset.planDay) {
-    Store.setWorkoutPlanDay(e.target.dataset.planDay, e.target.value);
-  }
+  if (e.target.dataset.planDay) Store.setWorkoutPlanDay(e.target.dataset.planDay, e.target.value);
+  if (e.target.id === 'wk-height') { Store.setProfile(parseFloat(e.target.value) || null, undefined); }
+  if (e.target.id === 'wk-weight') { Store.setProfile(undefined, parseFloat(e.target.value) || null); }
 });
 
 // ==========================================================
 // NUTRITION DETAIL
 // ==========================================================
-const MEALS = [['breakfast','Завтрак'],['lunch','Обед'],['dinner','Ужин'],['snack','Перекус']];
+const MEALS = [['breakfast', 'Завтрак'], ['lunch', 'Обед'], ['dinner', 'Ужин'], ['snack', 'Перекус']];
+const FOOD_DB = {
+  'Мучное': [['Белый хлеб, 100г', 265], ['Батон, 100г', 260], ['Паста отварная, 100г', 131], ['Пицца, 1 кусок', 285], ['Блины, 1 шт', 90], ['Пельмени, 100г', 275]],
+  'Фрукты и овощи': [['Яблоко', 52], ['Банан', 89], ['Апельсин', 47], ['Огурец', 15], ['Помидор', 18], ['Авокадо', 160]],
+  'Белковое': [['Куриная грудка, 100г', 165], ['Яйцо, 1 шт', 78], ['Творог 5%, 100г', 121], ['Лосось, 100г', 208], ['Говядина, 100г', 250]],
+  'Молочное': [['Молоко 2.5%, стакан', 130], ['Йогурт натур., 100г', 66], ['Сыр твёрдый, 30г', 110]],
+  'Десерты': [['Тёмный шоколад, 30г', 170], ['Мороженое, 1 шар', 137], ['Печенье, 2 шт', 95], ['Пирожное', 250]],
+  'Напитки': [['Кофе с молоком', 60], ['Апельсиновый сок, стакан', 110], ['Газировка, стакан', 140], ['Смузи фруктовый', 180]],
+  'Орехи и снеки': [['Миндаль, 30г', 173], ['Арахис, 30г', 170], ['Чипсы, 30г', 152]],
+};
 
 function renderNutritionDetail() {
   const s = Store.getState();
@@ -374,16 +570,36 @@ function renderNutritionDetail() {
       <input class="field" data-meal="${key}" placeholder="Что съесть" value="${escapeHtml(s.mealPlan[key] || '')}">
     </div>
   `).join('');
+
+  const log = Store.getTodayFoodLog();
+  document.getElementById('nu-log-list').innerHTML = log.map(e => `
+    <div class="log-row">
+      <div><div class="log-name">${escapeHtml(e.name)}</div><div class="log-time">${formatTime(e.ts)}</div></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="log-cal">${e.calories} ккал</span>
+        <span class="item-del" data-del-log="${e.id}">✕</span>
+      </div>
+    </div>
+  `).join('') || '<p class="muted small">Пока ничего не добавлено сегодня</p>';
+
+  renderPrefChips('liked', 'nu-liked-row');
+  renderPrefChips('disliked', 'nu-disliked-row');
+
+  document.getElementById('nu-height').value = s.profile.heightCm || '';
+  document.getElementById('nu-weight').value = s.profile.weightKg || '';
 }
 Router.register('nutrition-detail', renderNutritionDetail);
 
+function renderPrefChips(kind, elId) {
+  const s = Store.getState();
+  const el = document.getElementById(elId);
+  el.innerHTML = s.nutritionPrefs[kind].map(item => `
+    <span class="pref-chip ${kind}">${escapeHtml(item)}<span class="x" data-del-pref="${kind}" data-pref-val="${escapeHtml(item)}">✕</span></span>
+  `).join('') || `<span class="muted small">пока пусто</span>`;
+}
+
 document.getElementById('screen-nutrition-detail').addEventListener('click', e => {
   const t = e.target;
-  if (t.dataset.nu) {
-    const s = Store.getState();
-    Store.setNutrition(Math.max(0, s.nutrition.eaten + parseInt(t.dataset.nu, 10)));
-    renderNutritionDetail(); renderToday(); renderOverview();
-  }
   if (t.closest('[data-action="edit-cal-goal"]')) {
     const s = Store.getState();
     Sheet.open(`
@@ -400,22 +616,85 @@ document.getElementById('screen-nutrition-detail').addEventListener('click', e =
   if (t.closest('[data-action="ai-meal-stub"]')) {
     Sheet.open(`<h3>ИИ-план питания</h3><p class="muted small">Появится, когда бэкенд будет подключён к нейросети. Пока план заполняется вручную.</p>`);
   }
+  if (t.closest('[data-action="open-food-picker"]')) openFoodPickerSheet();
+  if (t.closest('[data-action="add-food-custom"]')) openCustomFoodSheet();
+  if (t.dataset.delLog) { Store.removeFoodLogEntry(t.dataset.delLog); renderNutritionDetail(); renderToday(); renderOverview(); }
+  if (t.dataset.delPref) { Store.removePrefItem(t.dataset.delPref, t.dataset.prefVal); renderNutritionDetail(); }
 });
 document.getElementById('screen-nutrition-detail').addEventListener('change', e => {
-  if (e.target.dataset.meal) {
-    Store.setMealPlan(e.target.dataset.meal, e.target.value);
-  }
+  if (e.target.dataset.meal) Store.setMealPlan(e.target.dataset.meal, e.target.value);
+  if (e.target.id === 'nu-height') { Store.setProfile(parseFloat(e.target.value) || null, undefined); renderWorkoutDetail(); }
+  if (e.target.id === 'nu-weight') { Store.setProfile(undefined, parseFloat(e.target.value) || null); renderWorkoutDetail(); }
 });
 
-// --- food photo (camera) stub ---
-document.getElementById('food-photo-btn').addEventListener('click', () => {
-  document.getElementById('food-photo-input').click();
+document.getElementById('nu-liked-add').addEventListener('click', () => {
+  const input = document.getElementById('nu-liked-input');
+  const val = input.value.trim();
+  if (val) { Store.addPrefItem('liked', val); input.value = ''; renderPrefChips('liked', 'nu-liked-row'); }
 });
+document.getElementById('nu-disliked-add').addEventListener('click', () => {
+  const input = document.getElementById('nu-disliked-input');
+  const val = input.value.trim();
+  if (val) { Store.addPrefItem('disliked', val); input.value = ''; renderPrefChips('disliked', 'nu-disliked-row'); }
+});
+
+function openFoodPickerSheet() {
+  const cats = Object.keys(FOOD_DB);
+  let active = cats[0];
+  const render = () => `
+    <h3>Выбрать блюдо</h3>
+    <div class="food-cat-row" id="fp-cats">
+      ${cats.map(c => `<span class="food-cat-chip ${c === active ? 'selected' : ''}" data-fp-cat="${escapeHtml(c)}">${escapeHtml(c)}</span>`).join('')}
+    </div>
+    <div id="fp-items">
+      ${FOOD_DB[active].map(([name, kcal]) => `
+        <div class="food-item-row" data-fp-item="${escapeHtml(name)}" data-fp-kcal="${kcal}">
+          <span class="food-item-name">${escapeHtml(name)}</span>
+          <span class="food-item-kcal">${kcal} ккал</span>
+        </div>
+      `).join('')}
+    </div>
+    <button class="ghost-btn" id="fp-done">Готово</button>
+  `;
+  const mount = root => {
+    root.querySelectorAll('[data-fp-cat]').forEach(chip => chip.addEventListener('click', () => {
+      active = chip.dataset.fpCat; root.innerHTML = render(); mount(root);
+    }));
+    root.querySelectorAll('[data-fp-item]').forEach(row => row.addEventListener('click', () => {
+      Store.addFoodLogEntry(row.dataset.fpItem, parseInt(row.dataset.fpKcal, 10));
+      renderNutritionDetail(); renderToday(); renderOverview();
+      row.style.opacity = '.4';
+    }));
+    root.querySelector('#fp-done').addEventListener('click', Sheet.close);
+  };
+  Sheet.open(render(), mount);
+}
+
+function openCustomFoodSheet() {
+  Sheet.open(`
+    <h3>Добавить в дневник</h3>
+    <input class="field" id="sheet-food-name" placeholder="Название">
+    <input class="field" id="sheet-food-kcal" type="number" inputmode="numeric" placeholder="Калории">
+    <button class="primary-btn" id="sheet-food-save">Добавить</button>
+  `, root => {
+    root.querySelector('#sheet-food-save').addEventListener('click', () => {
+      const name = root.querySelector('#sheet-food-name').value.trim();
+      const kcal = parseInt(root.querySelector('#sheet-food-kcal').value, 10);
+      if (name && !isNaN(kcal)) {
+        Store.addFoodLogEntry(name, kcal);
+        renderNutritionDetail(); renderToday(); renderOverview(); Sheet.close();
+      }
+    });
+  });
+}
+
+// --- food photo (camera) stub ---
+document.getElementById('food-photo-btn').addEventListener('click', () => document.getElementById('food-photo-input').click());
 document.getElementById('food-photo-input').addEventListener('change', e => {
   if (!e.target.files || !e.target.files[0]) return;
   Sheet.open(`
     <h3>Фото получено</h3>
-    <p class="muted small">Распознавание калорий по фото ещё не подключено — для этого нужен бэкенд с ИИ-моделью, которая умеет анализировать изображения. Пока можно ввести калории вручную.</p>
+    <p class="muted small">Распознавание калорий по фото ещё не подключено — для этого нужен бэкенд с ИИ-моделью, которая умеет анализировать изображения. Пока можно добавить блюдо вручную или через «Выбрать блюдо».</p>
   `);
   e.target.value = '';
 });
@@ -431,26 +710,18 @@ function renderHistory() {
   const y = historyCursor.getFullYear();
   const m = historyCursor.getMonth();
   document.getElementById('history-month-label').textContent = `${MONTHS[m]} ${y}`;
-
   const snapshots = Store.getMonthSnapshots(y, m);
   const firstDow = (new Date(y, m, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(y, m + 1, 0).getDate();
-
   const grid = document.getElementById('history-grid');
   let html = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => `<div class="cal-dow">${d}</div>`).join('');
   for (let i = 0; i < firstDow; i++) html += `<div class="cal-day empty"></div>`;
-
   for (let day = 1; day <= daysInMonth; day++) {
     const dateISO = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const snap = snapshots[dateISO];
     const pct = snap ? snap.pct : null;
     let level = 'l0';
-    if (pct !== null) {
-      if (pct >= 90) level = 'l4';
-      else if (pct >= 70) level = 'l3';
-      else if (pct >= 40) level = 'l2';
-      else level = 'l1';
-    }
+    if (pct !== null) { level = pct >= 90 ? 'l4' : pct >= 70 ? 'l3' : pct >= 40 ? 'l2' : 'l1'; }
     const isToday = dateISO === Store.todayISO();
     const isSelected = dateISO === selectedDay;
     html += `<div class="cal-day ${level} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-day="${dateISO}">
@@ -458,10 +729,7 @@ function renderHistory() {
     </div>`;
   }
   grid.innerHTML = html;
-
-  if (!selectedDay || snapshots[selectedDay] === undefined) {
-    selectedDay = snapshots[Store.todayISO()] ? Store.todayISO() : null;
-  }
+  if (!selectedDay || snapshots[selectedDay] === undefined) selectedDay = snapshots[Store.todayISO()] ? Store.todayISO() : null;
   renderDayDetail();
 }
 Router.register('history', renderHistory);
@@ -477,7 +745,7 @@ function renderDayDetail() {
   list.innerHTML = `
     <li><span class="item-text">Привычки выполнены</span><span class="muted">${snap.pct}%</span></li>
     <li><span class="item-text">Калории</span><span class="muted">${snap.calories} ккал</span></li>
-    <li><span class="item-text">Траты</span><span class="muted">${snap.spending} ₽</span></li>
+    <li><span class="item-text">Траты</span><span class="muted">${fmtMoney(snap.spending)}</span></li>
   `;
 }
 
@@ -494,7 +762,6 @@ document.getElementById('screen-history').addEventListener('click', e => {
 // ==========================================================
 function renderAnalytics() {
   const days = Store.getRecentDays(14);
-
   const pcts = days.map(d => d.pct ?? 0);
   const avgPct = Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
   document.getElementById('an-habit-avg').textContent = avgPct + '%';
@@ -507,8 +774,9 @@ function renderAnalytics() {
 
   const spends = days.map(d => d.spending ?? 0);
   const avgSpend = Math.round(spends.reduce((a, b) => a + b, 0) / spends.length);
-  document.getElementById('an-spend-avg').textContent = avgSpend + ' ₽';
-  Charts.bars(document.getElementById('chart-spending'), spends, { color: '#A9803D' });
+  document.getElementById('an-spend-avg').textContent = fmtMoney(avgSpend);
+  const cur = Store.getState().settings.currency;
+  Charts.bars(document.getElementById('chart-spending'), spends.map(v => Currency.toDisplay(v, cur)), { color: '#A9803D' });
 }
 Router.register('analytics', renderAnalytics);
 
@@ -549,12 +817,6 @@ document.getElementById('chat-form').addEventListener('submit', e => {
   setTimeout(() => addMessage('bot', 'Пока отвечаю заглушкой — подключение к настоящей модели будет добавлено отдельно.'), 300);
 });
 
-// ---- utils ----
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 // ---- boot ----
 Router.go('today');
+Currency.ensureRates().then(() => { if (Router.current() === 'finance-detail') renderFinanceDetail(); });

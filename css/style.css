@@ -330,18 +330,17 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 }
 .chip.selected { background: var(--teal-soft); color: #6FCBBB; border-color: rgba(44,140,127,0.4); }
 
-/* ===== Water card ===== */
-.cup-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+/* ===== Water card — plain fill squares ===== */
+.cup-row { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
 .cup {
-  width: 30px; height: 34px;
-  border-radius: 6px 6px 10px 10px;
+  width: 26px; height: 26px;
+  border-radius: 7px;
   border: 1.5px solid var(--border-strong);
   background: var(--surface-2);
-  display: flex; align-items: flex-end; justify-content: center;
-  font-size: 13px;
   cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
 }
-.cup.filled { background: var(--blue-soft); border-color: rgba(74,111,160,0.5); }
+.cup.filled { background: var(--blue); border-color: var(--blue); }
 .water-controls { display: flex; align-items: center; gap: 10px; }
 .water-bar { flex: 1; }
 .round-btn {
@@ -475,3 +474,123 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .hint { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; margin-top: 8px; }
 .income-amt { color: #6FCBBB; }
 .expense-amt { color: #D08F8B; }
+
+/* ===== Bigger, more solid bottom sheet ===== */
+.sheet {
+  min-height: 56vh;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 22px calc(28px + env(safe-area-inset-bottom));
+}
+#sheet-content { overflow-y: auto; flex: 1; padding-top: 4px; }
+.sheet h3 { font-size: 19px; margin-bottom: 18px; }
+.sheet .field { padding: 14px 16px; font-size: 15.5px; margin-bottom: 12px; }
+.sheet .primary-btn { padding: 15px; font-size: 15.5px; margin-top: 4px; }
+.sheet-section-label {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-tertiary); margin: 18px 0 10px;
+}
+.sheet-section-label:first-child { margin-top: 0; }
+
+/* ===== Back-header (detail screens) ===== */
+.screen-head .icon-btn ~ div h1,
+.screen-head > div > h1 { line-height: 1.1; }
+
+/* ===== Body profile card ===== */
+.profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.profile-field-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+
+/* ===== Food log ===== */
+.log-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+}
+.log-row:last-child { border-bottom: none; }
+.log-name { font-size: 14px; }
+.log-time { font-size: 11.5px; color: var(--text-tertiary); margin-top: 1px; }
+.log-cal { font-size: 13.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* ===== Preference chips (liked / disliked) ===== */
+.pref-block { margin-bottom: 14px; }
+.pref-block:last-child { margin-bottom: 0; }
+.pref-title { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 8px; }
+.pref-chip-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
+.pref-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px 6px 12px;
+  border-radius: 16px;
+  font-size: 12.5px;
+  border: 1px solid;
+}
+.pref-chip.liked { background: var(--teal-soft); border-color: rgba(44,140,127,0.35); color: #7FD6C4; }
+.pref-chip.disliked { background: var(--red-soft); border-color: rgba(166,82,78,0.35); color: #E0A6A2; }
+.pref-chip .x { cursor: pointer; opacity: .7; font-size: 13px; }
+.pref-add-row { display: flex; gap: 8px; }
+.pref-add-row input { flex: 1; margin-bottom: 0; }
+.pref-add-row button {
+  padding: 0 14px; border-radius: var(--radius-s); border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text-primary); font-size: 13px; cursor: pointer;
+}
+
+/* ===== Food category picker ===== */
+.food-cat-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
+.food-cat-row::-webkit-scrollbar { display: none; }
+.food-cat-chip {
+  flex-shrink: 0; padding: 8px 14px; border-radius: 18px;
+  border: 1px solid var(--border-strong); background: var(--surface-2);
+  color: var(--text-secondary); font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.food-cat-chip.selected { background: var(--amber-soft); color: #D9B679; border-color: rgba(169,128,61,0.4); }
+.food-item-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: var(--radius-s);
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.food-item-name { font-size: 14px; }
+.food-item-kcal { font-size: 13px; color: var(--text-secondary); }
+
+/* ===== Notes: folder tabs + note cards ===== */
+.folder-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
+.folder-tabs::-webkit-scrollbar { display: none; }
+.folder-tab {
+  flex-shrink: 0; padding: 8px 15px; border-radius: 18px;
+  border: 1px solid var(--border-strong); background: var(--surface-2);
+  color: var(--text-secondary); font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.folder-tab.selected { background: var(--violet-soft); color: #C4BCE8; border-color: rgba(110,100,160,0.4); }
+.folder-tab.add-tab { color: var(--text-tertiary); }
+.note-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.note-card-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.note-card-time { font-size: 11px; color: var(--text-tertiary); margin-top: 8px; }
+.note-empty { text-align: center; padding: 30px 10px; color: var(--text-tertiary); font-size: 13.5px; }
+
+/* ===== Task detail list ===== */
+.task-section-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-tertiary); margin: 18px 0 8px; }
+.task-section-label:first-of-type { margin-top: 0; }
+
+/* ===== Currency chips ===== */
+.currency-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.currency-chip {
+  flex: 1; text-align: center;
+  padding: 10px 6px; border-radius: var(--radius-s);
+  border: 1px solid var(--border-strong); background: var(--surface-2);
+  color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.currency-chip.selected { background: var(--teal-soft); color: #6FCBBB; border-color: rgba(44,140,127,0.4); }
+.fx-hint { font-size: 11.5px; color: var(--text-tertiary); text-align: center; margin-bottom: 14px; }
+
+/* ===== Capital rows with delete ===== */
+.alloc-row-wrap { display: flex; align-items: center; gap: 8px; }
+.alloc-row-wrap .alloc-row { flex: 1; }
+.alloc-del { color: var(--text-tertiary); font-size: 15px; padding: 6px; cursor: pointer; }

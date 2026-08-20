@@ -95,15 +95,15 @@
     </div>
 
     <div class="card tap-card" data-action="open-finance-detail">
-      <div class="card-head"><h2>Траты</h2><span class="tap-hint">›</span></div>
+      <div class="card-head"><h2>Финансы</h2><span class="tap-hint">›</span></div>
       <div class="stat-row"><span class="stat-num" id="ov-spend">0 ₽</span></div>
       <div class="bar"><div class="bar-fill accent-amber" id="ov-spend-bar"></div></div>
       <ul class="list compact" id="ov-spend-list"></ul>
     </div>
 
     <div class="bento">
-      <div class="card bento-item" data-action="open-tasks">
-        <div class="card-head"><h2>Задачи</h2></div>
+      <div class="card bento-item tap-card" data-action="open-tasks-detail">
+        <div class="card-head"><h2>Задачи</h2><span class="tap-hint">›</span></div>
         <div class="stat-row">
           <span class="stat-num" id="ov-tasks">0</span>
           <span class="muted">активных</span>
@@ -111,8 +111,8 @@
         <button class="ghost-btn" data-action="add-task">+ Задача</button>
       </div>
 
-      <div class="card bento-item" data-action="open-notes">
-        <div class="card-head"><h2>Заметки</h2></div>
+      <div class="card bento-item tap-card" data-action="open-notes-detail">
+        <div class="card-head"><h2>Заметки</h2><span class="tap-hint">›</span></div>
         <ul class="list compact" id="ov-notes-list"></ul>
         <button class="ghost-btn" data-action="add-note">+ Заметка</button>
       </div>
@@ -124,6 +124,34 @@
     </div>
   </section>
 
+  <!-- ===== TASKS DETAIL ===== -->
+  <section class="screen" id="screen-tasks-detail" data-screen="tasks-detail">
+    <header class="screen-head">
+      <button class="icon-btn" data-action="back-to-overview">‹</button>
+      <div><h1>Задачи</h1></div>
+      <button class="icon-btn accent" data-action="add-task">+</button>
+    </header>
+
+    <div class="card">
+      <div class="task-section-label">Активные</div>
+      <ul class="list" id="tasks-active-list"></ul>
+      <div class="task-section-label" id="tasks-done-label" style="display:none">Выполненные</div>
+      <ul class="list" id="tasks-done-list"></ul>
+    </div>
+  </section>
+
+  <!-- ===== NOTES DETAIL ===== -->
+  <section class="screen" id="screen-notes-detail" data-screen="notes-detail">
+    <header class="screen-head">
+      <button class="icon-btn" data-action="back-to-overview">‹</button>
+      <div><h1>Заметки</h1></div>
+      <button class="icon-btn accent" data-action="add-note">+</button>
+    </header>
+
+    <div class="folder-tabs" id="notes-folder-tabs"></div>
+    <div id="notes-list"></div>
+  </section>
+
   <!-- ===== FINANCE DETAIL ===== -->
   <section class="screen" id="screen-finance-detail" data-screen="finance-detail">
     <header class="screen-head">
@@ -133,6 +161,8 @@
     </header>
 
     <div class="card">
+      <div class="currency-row" id="fin-currency-row"></div>
+      <div class="fx-hint" id="fin-fx-hint"></div>
       <div class="mini-label">Баланс (распределённый капитал)</div>
       <div class="balance-num" id="fin-balance">0 ₽</div>
       <div class="grid-2" style="margin-top:12px">
@@ -150,6 +180,13 @@
     <div class="card">
       <div class="card-head"><h2>Распределение капитала</h2></div>
       <div class="alloc-list" id="fin-allocation"></div>
+      <button class="ghost-btn" data-action="add-capital-category">+ Категория</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Советы по финансам</h2></div>
+      <div class="tip-box" id="fin-tip-box">Заполните пару операций — здесь появятся наблюдения по вашим тратам и доходам.</div>
+      <button class="ghost-btn" data-action="fin-tip-stub">Получить совет</button>
     </div>
 
     <div class="card">
@@ -187,6 +224,21 @@
       <p class="muted small">ИИ пока не подключён к приложению — нужен бэкенд, который будет обращаться к модели.</p>
       <button class="ghost-btn" data-action="ai-tip-stub">Получить совет</button>
     </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Рост и вес</h2></div>
+      <div class="profile-grid">
+        <div>
+          <div class="profile-field-label">Рост, см</div>
+          <input class="field" id="wk-height" type="number" inputmode="numeric" placeholder="—" style="margin-bottom:0">
+        </div>
+        <div>
+          <div class="profile-field-label">Вес, кг</div>
+          <input class="field" id="wk-weight" type="number" inputmode="numeric" placeholder="—" style="margin-bottom:0">
+        </div>
+      </div>
+      <p class="hint">Эти данные использует ИИ-помощник при составлении плана тренировок и питания.</p>
+    </div>
   </section>
 
   <!-- ===== NUTRITION DETAIL ===== -->
@@ -201,10 +253,9 @@
       <div class="card-head"><h2>Сегодня</h2><span class="muted" id="nu-goal-label">цель 2300 ккал</span></div>
       <div class="stat-row"><span class="stat-num" id="nu-eaten">0</span><span class="muted">ккал съедено</span></div>
       <div class="bar"><div class="bar-fill accent-amber" id="nu-bar"></div></div>
-      <div class="chip-row" style="margin-top:12px">
-        <span class="chip" data-nu="-100">−100</span>
-        <span class="chip" data-nu="100">+100</span>
-        <span class="chip" data-nu="300">+300</span>
+      <div class="grid-2" style="margin-top:12px">
+        <button class="ghost-btn" style="margin-top:0" data-action="open-food-picker">🍽 Выбрать блюдо</button>
+        <button class="ghost-btn" style="margin-top:0" data-action="add-food-custom">+ Своё</button>
       </div>
       <button class="ghost-btn" data-action="edit-cal-goal">Изменить цель</button>
     </div>
@@ -214,6 +265,46 @@
       <p class="muted small">Сфотографируй еду — приложение оценит калорийность.</p>
       <input type="file" accept="image/*" capture="environment" id="food-photo-input" style="display:none">
       <button class="ghost-btn" id="food-photo-btn">Сделать фото</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Дневник питания</h2><span class="muted">сегодня</span></div>
+      <div id="nu-log-list"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Продукты</h2></div>
+      <div class="pref-block">
+        <div class="pref-title">Желательные</div>
+        <div class="pref-chip-row" id="nu-liked-row"></div>
+        <div class="pref-add-row">
+          <input class="field" id="nu-liked-input" placeholder="Добавить продукт">
+          <button id="nu-liked-add">+</button>
+        </div>
+      </div>
+      <div class="pref-block">
+        <div class="pref-title">Нежелательные</div>
+        <div class="pref-chip-row" id="nu-disliked-row"></div>
+        <div class="pref-add-row">
+          <input class="field" id="nu-disliked-input" placeholder="Добавить продукт">
+          <button id="nu-disliked-add">+</button>
+        </div>
+      </div>
+      <p class="hint">ИИ учтёт этот список, когда бэкенд будет подключён.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Рост и вес</h2></div>
+      <div class="profile-grid">
+        <div>
+          <div class="profile-field-label">Рост, см</div>
+          <input class="field" id="nu-height" type="number" inputmode="numeric" placeholder="—" style="margin-bottom:0">
+        </div>
+        <div>
+          <div class="profile-field-label">Вес, кг</div>
+          <input class="field" id="nu-weight" type="number" inputmode="numeric" placeholder="—" style="margin-bottom:0">
+        </div>
+      </div>
     </div>
 
     <div class="card">
