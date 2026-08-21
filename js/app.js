@@ -33,14 +33,43 @@ const Sheet = (() => {
   const backdrop = document.getElementById('sheet-backdrop');
   const sheet = document.getElementById('sheet');
   const content = document.getElementById('sheet-content');
+  const handle = sheet.querySelector('.sheet-handle');
+
   function open(html, onMount) {
     content.innerHTML = html;
+    sheet.style.transform = '';
     backdrop.classList.add('open');
     sheet.classList.add('open');
     if (onMount) onMount(content);
   }
-  function close() { backdrop.classList.remove('open'); sheet.classList.remove('open'); }
+  function close() {
+    backdrop.classList.remove('open');
+    sheet.classList.remove('open');
+    sheet.style.transform = '';
+  }
   backdrop.addEventListener('click', close);
+
+  // Swipe-down-to-dismiss, dragging from the handle only so it never
+  // fights with scrolling inside the sheet's own form fields/lists.
+  let startY = 0, dragging = false;
+  handle.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    dragging = true;
+    sheet.classList.add('dragging');
+  }, { passive: true });
+  handle.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const delta = Math.max(0, e.touches[0].clientY - startY);
+    sheet.style.transform = `translateY(${delta}px)`;
+  }, { passive: true });
+  handle.addEventListener('touchend', e => {
+    if (!dragging) return;
+    dragging = false;
+    sheet.classList.remove('dragging');
+    const delta = Math.max(0, (e.changedTouches[0].clientY - startY));
+    if (delta > 90) close(); else sheet.style.transform = '';
+  });
+
   return { open, close };
 })();
 
@@ -197,13 +226,8 @@ function renderOverview() {
   document.getElementById('ov-workout').textContent = s.workout.minutes;
   document.getElementById('ov-workout-bar').style.width = Math.min(100, (s.workout.minutes / s.workout.goal) * 100) + '%';
 
-  const todaySpend = s.transactions.filter(t => t.date === Store.todayISO() && t.type === 'expense');
-  const spendTotal = todaySpend.reduce((sum, t) => sum + t.amount, 0);
-  document.getElementById('ov-spend').textContent = fmtMoney(spendTotal);
-  document.getElementById('ov-spend-bar').style.width = Math.min(100, (spendTotal / 2000) * 100) + '%';
-  document.getElementById('ov-spend-list').innerHTML = todaySpend.slice(0, 3).map(t => `
-    <li><span class="item-text">${escapeHtml(t.category)}</span><span class="muted">−${fmtMoney(t.amount)}</span></li>
-  `).join('') || '<li class="muted">Пока нет трат</li>';
+  document.getElementById('ov-balance').textContent = fmtMoney(Store.getCapitalTotal());
+  renderOverviewAllocBar();
 
   document.getElementById('ov-tasks').textContent = s.tasks.filter(t => !t.done).length;
   document.getElementById('ov-notes-list').innerHTML = s.notes.slice(0, 2).map(n => `
@@ -211,6 +235,23 @@ function renderOverview() {
   `).join('') || '<li class="muted">Пока нет заметок</li>';
 }
 Router.register('overview', renderOverview);
+
+const SEGMENT_COLORS = ['#2C8C7F', '#4A6FA0', '#A9803D', '#6E64A0', '#A6524E', '#3FA0C2'];
+function renderOverviewAllocBar() {
+  const s = Store.getState();
+  const total = Store.getCapitalTotal();
+  const bar = document.getElementById('ov-alloc-bar');
+  const caption = document.getElementById('ov-alloc-caption');
+  if (!total) {
+    bar.innerHTML = '';
+    caption.textContent = 'Пока ничего не распределено';
+    return;
+  }
+  bar.innerHTML = s.capital.filter(c => c.amount > 0).map((c, i) => `
+    <div class="segment" style="width:${(c.amount / total * 100).toFixed(2)}%;background:${SEGMENT_COLORS[i % SEGMENT_COLORS.length]}"></div>
+  `).join('');
+  caption.textContent = 'Распределение капитала';
+}
 
 document.getElementById('screen-overview').addEventListener('click', e => {
   const t = e.target;
@@ -314,12 +355,18 @@ function renderNotesDetail() {
 
   const notes = s.notes.filter(n => n.folder === window.__notesSelectedFolder).sort((a, b) => b.ts - a.ts);
   const list = document.getElementById('notes-list');
-  list.innerHTML = notes.map(n => `
+  list.innerHTML = notes.map(n => {
+    const lines = n.text.split('\n');
+    const title = lines[0].slice(0, 60);
+    const preview = lines.slice(1).join(' ').trim();
+    return `
     <div class="note-card" data-edit-note="${n.id}">
-      <div class="note-card-text">${escapeHtml(n.text)}</div>
-      <div class="note-card-time">${new Date(n.ts).toLocaleDateString('ru-RU')} · ${formatTime(n.ts)}</div>
+      <div class="note-card-title">${escapeHtml(title)}</div>
+      <div class="note-card-text ${preview ? '' : 'empty'}">${preview ? escapeHtml(preview) : 'Нет текста'}</div>
+      <div class="note-card-time">${new Date(n.ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</div>
     </div>
-  `).join('') || '<div class="note-empty">В этой папке пока пусто</div>';
+  `;
+  }).join('') || '<div class="note-empty">В этой папке пока пусто</div>';
 }
 Router.register('notes-detail', renderNotesDetail);
 
@@ -512,12 +559,31 @@ function openAddCapitalCategorySheet() {
 // ==========================================================
 // WORKOUT DETAIL
 // ==========================================================
+const EXERCISE_DB = {
+  'Грудь': ['Жим лёжа', 'Отжимания', 'Разведение гантелей лёжа', 'Жим гантелей на наклонной'],
+  'Спина': ['Подтягивания', 'Тяга штанги в наклоне', 'Тяга верхнего блока', 'Гиперэкстензия'],
+  'Ноги': ['Приседания', 'Выпады', 'Жим ногами', 'Румынская тяга'],
+  'Плечи': ['Жим гантелей стоя', 'Разведение гантелей в стороны', 'Тяга к подбородку'],
+  'Руки': ['Сгибания на бицепс', 'Разгибания на трицепс', 'Французский жим'],
+  'Пресс': ['Скручивания', 'Планка', 'Подъём ног в висе'],
+  'Кардио': ['Бег', 'Скакалка', 'Велотренажёр', 'Берпи'],
+};
+
 const WEEK_DAYS = [['mon', 'Пн'], ['tue', 'Вт'], ['wed', 'Ср'], ['thu', 'Чт'], ['fri', 'Пт'], ['sat', 'Сб'], ['sun', 'Вс']];
 
 function renderWorkoutDetail() {
   const s = Store.getState();
   document.getElementById('wk-minutes').textContent = s.workout.minutes;
   document.getElementById('wk-bar').style.width = Math.min(100, (s.workout.minutes / s.workout.goal) * 100) + '%';
+
+  const log = Store.getTodayWorkoutLog();
+  document.getElementById('wk-log-list').innerHTML = log.map(e => `
+    <div class="log-row">
+      <div><div class="log-name">${escapeHtml(e.name)}</div><div class="log-time">${escapeHtml(e.group)} · ${formatTime(e.ts)}</div></div>
+      <span class="item-del" data-del-wk-log="${e.id}">✕</span>
+    </div>
+  `).join('') || '<p class="muted small">Пока ничего не добавлено сегодня</p>';
+
   const plan = document.getElementById('wk-plan');
   plan.innerHTML = WEEK_DAYS.map(([key, label]) => `
     <div class="plan-row">
@@ -533,10 +599,44 @@ Router.register('workout-detail', renderWorkoutDetail);
 document.getElementById('screen-workout-detail').addEventListener('click', e => {
   const t = e.target;
   if (t.dataset.wk) { Store.addWorkoutMinutes(parseInt(t.dataset.wk, 10)); renderWorkoutDetail(); renderOverview(); }
+  if (t.dataset.delWkLog) { Store.removeWorkoutLogEntry(t.dataset.delWkLog); renderWorkoutDetail(); }
+  if (t.closest('[data-action="open-exercise-picker"]')) openExercisePickerSheet();
   if (t.closest('[data-action="ai-tip-stub"]')) {
     Sheet.open(`<h3>ИИ-советы</h3><p class="muted small">Эта функция появится, когда бэкенд будет подключён к нейросети. Пока это заглушка.</p>`);
   }
 });
+
+function openExercisePickerSheet() {
+  const cats = Object.keys(EXERCISE_DB);
+  let active = cats[0];
+  const render = () => `
+    <h3>Выбрать упражнение</h3>
+    <div class="food-cat-row" id="ep-cats">
+      ${cats.map(c => `<span class="food-cat-chip ${c === active ? 'selected' : ''}" data-ep-cat="${escapeHtml(c)}">${escapeHtml(c)}</span>`).join('')}
+    </div>
+    <div id="ep-items">
+      ${EXERCISE_DB[active].map(name => `
+        <div class="food-item-row" data-ep-item="${escapeHtml(name)}">
+          <span class="food-item-name">${escapeHtml(name)}</span>
+          <span class="food-item-kcal">${escapeHtml(active)}</span>
+        </div>
+      `).join('')}
+    </div>
+    <button class="ghost-btn" id="ep-done">Готово</button>
+  `;
+  const mount = root => {
+    root.querySelectorAll('[data-ep-cat]').forEach(chip => chip.addEventListener('click', () => {
+      active = chip.dataset.epCat; root.innerHTML = render(); mount(root);
+    }));
+    root.querySelectorAll('[data-ep-item]').forEach(row => row.addEventListener('click', () => {
+      Store.addWorkoutLogEntry(row.dataset.epItem, active);
+      renderWorkoutDetail();
+      row.style.opacity = '.4';
+    }));
+    root.querySelector('#ep-done').addEventListener('click', Sheet.close);
+  };
+  Sheet.open(render(), mount);
+}
 document.getElementById('screen-workout-detail').addEventListener('change', e => {
   if (e.target.dataset.planDay) Store.setWorkoutPlanDay(e.target.dataset.planDay, e.target.value);
   if (e.target.id === 'wk-height') { Store.setProfile(parseFloat(e.target.value) || null, undefined); }

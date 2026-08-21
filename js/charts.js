@@ -66,19 +66,29 @@ const Charts = (() => {
     const color = opts.color || '#A9803D';
     const gap = 4;
     const barW = (w - pad * 2 - gap * (values.length - 1)) / values.length;
+    const baseline = h - pad;
     values.forEach((v, i) => {
       const x = pad + i * (barW + gap);
-      const bh = ((v || 0) / (max || 1)) * (h - pad * 2);
-      const y = h - pad - bh;
+      const bh = Math.max(0, ((v || 0) / (max || 1)) * (h - pad * 2));
+      // Guard: a rounded-rect needs bh >= 2*r or the path inverts and
+      // draws garbage below the baseline. Near-zero days (common here,
+      // since most days have no spending) hit exactly that case, which
+      // was the broken/spiky rendering. Draw a thin baseline tick instead.
+      if (bh < 3) {
+        ctx.fillStyle = color + '55';
+        ctx.fillRect(x, baseline - 1.5, barW, 1.5);
+        return;
+      }
+      const y = baseline - bh;
+      const r = Math.min(3, barW / 2, bh / 2);
       ctx.fillStyle = color;
       ctx.beginPath();
-      const r = Math.min(3, barW / 2);
       ctx.moveTo(x, y + r);
       ctx.arcTo(x, y, x + r, y, r);
       ctx.lineTo(x + barW - r, y);
       ctx.arcTo(x + barW, y, x + barW, y + r, r);
-      ctx.lineTo(x + barW, h - pad);
-      ctx.lineTo(x, h - pad);
+      ctx.lineTo(x + barW, baseline);
+      ctx.lineTo(x, baseline);
       ctx.closePath();
       ctx.fill();
     });

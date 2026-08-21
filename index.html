@@ -96,9 +96,9 @@
 
     <div class="card tap-card" data-action="open-finance-detail">
       <div class="card-head"><h2>Финансы</h2><span class="tap-hint">›</span></div>
-      <div class="stat-row"><span class="stat-num" id="ov-spend">0 ₽</span></div>
-      <div class="bar"><div class="bar-fill accent-amber" id="ov-spend-bar"></div></div>
-      <ul class="list compact" id="ov-spend-list"></ul>
+      <div class="stat-row"><span class="stat-num" id="ov-balance">0 ₽</span><span class="muted">баланс</span></div>
+      <div class="segmented-bar" id="ov-alloc-bar"></div>
+      <div class="muted small" id="ov-alloc-caption">Распределение капитала</div>
     </div>
 
     <div class="bento">
@@ -145,11 +145,12 @@
     <header class="screen-head">
       <button class="icon-btn" data-action="back-to-overview">‹</button>
       <div><h1>Заметки</h1></div>
-      <button class="icon-btn accent" data-action="add-note">+</button>
+      <div style="width:36px"></div>
     </header>
 
     <div class="folder-tabs" id="notes-folder-tabs"></div>
-    <div id="notes-list"></div>
+    <div class="notes-grid" id="notes-list"></div>
+    <button class="fab" data-action="add-note" aria-label="Новая заметка">+</button>
   </section>
 
   <!-- ===== FINANCE DETAIL ===== -->
@@ -212,6 +213,12 @@
         <span class="chip" data-wk="10">+10 мин</span>
         <span class="chip" data-wk="30">+30 мин</span>
       </div>
+      <button class="ghost-btn" data-action="open-exercise-picker">🏋 Выбрать упражнение</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Дневник тренировки</h2><span class="muted">сегодня</span></div>
+      <div id="wk-log-list"></div>
     </div>
 
     <div class="card">

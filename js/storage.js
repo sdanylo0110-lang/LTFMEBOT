@@ -32,6 +32,7 @@ const Store = (() => {
     mealPlan: { breakfast: '', lunch: '', dinner: '', snack: '' },
     workout: { minutes: 0, goal: 60 },
     workoutPlan: { mon: '', tue: '', wed: '', thu: '', fri: '', sat: '', sun: '' },
+    workoutLog: [], // {id, name, group, date, ts}
     profile: { heightCm: null, weightKg: null },
     capital: defaultCapital(),
     transactions: [], // {id, amount(RUB), type:'income'|'expense', category, note, date, ts}
@@ -166,6 +167,12 @@ const Store = (() => {
     // workout
     addWorkoutMinutes(delta) { state.workout.minutes = Math.max(0, state.workout.minutes + delta); persist(); },
     setWorkoutPlanDay(key, val) { if (key in state.workoutPlan) { state.workoutPlan[key] = val; persist(); } },
+    addWorkoutLogEntry(name, group) {
+      state.workoutLog.unshift({ id: uid(), name, group, date: todayISO(), ts: Date.now() });
+      persist();
+    },
+    removeWorkoutLogEntry(id) { state.workoutLog = state.workoutLog.filter(x => x.id !== id); persist(); },
+    getTodayWorkoutLog() { return state.workoutLog.filter(x => x.date === todayISO()); },
 
     // body profile (shared by nutrition/workout)
     setProfile(heightCm, weightKg) {
