@@ -137,6 +137,36 @@ function fmtMoney(amountRUB) {
 }
 
 // ==========================================================
+// AI — Cloudflare Worker proxy (Workers AI, no key in the client)
+// ==========================================================
+const AI_WORKER_URL = 'https://ltfmbot.s-danylo0110.workers.dev';
+
+async function askAI(message, context) {
+  const resp = await fetch(`${AI_WORKER_URL}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, context }),
+  });
+  if (!resp.ok) throw new Error('AI request failed');
+  const data = await resp.json();
+  return data.reply || '';
+}
+
+// Downscale + JPEG-compress before sending, so a multi-MB phone photo
+// doesn't turn into a huge, slow JSON byte array over mobile data.
+async function resizeImageFile(file, maxDim = 1024, quality = 0.82) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+}
+
+// ==========================================================
 // TODAY
 // ==========================================================
 function renderToday() {
@@ -596,13 +626,25 @@ function renderWorkoutDetail() {
 }
 Router.register('workout-detail', renderWorkoutDetail);
 
-document.getElementById('screen-workout-detail').addEventListener('click', e => {
+document.getElementById('screen-workout-detail').addEventListener('click', async e => {
   const t = e.target;
   if (t.dataset.wk) { Store.addWorkoutMinutes(parseInt(t.dataset.wk, 10)); renderWorkoutDetail(); renderOverview(); }
   if (t.dataset.delWkLog) { Store.removeWorkoutLogEntry(t.dataset.delWkLog); renderWorkoutDetail(); }
   if (t.closest('[data-action="open-exercise-picker"]')) openExercisePickerSheet();
   if (t.closest('[data-action="ai-tip-stub"]')) {
-    Sheet.open(`<h3>ИИ-советы</h3><p class="muted small">Эта функция появится, когда бэкенд будет подключён к нейросети. Пока это заглушка.</p>`);
+    Sheet.open(`<h3>ИИ-советы</h3><p class="muted small">Думаю…</p>`);
+    const s = Store.getState();
+    const log = Store.getTodayWorkoutLog();
+    const context =
+      `Рост: ${s.profile.heightCm || '?'} см, вес: ${s.profile.weightKg || '?'} кг. ` +
+      `Минут тренировки сегодня: ${s.workout.minutes}. ` +
+      `Упражнения сегодня: ${log.map(x => x.name).join(', ') || 'нет'}.`;
+    try {
+      const reply = await askAI('Дай короткий практичный совет по сегодняшней тренировке и что стоит улучшить.', context);
+      Sheet.open(`<h3>ИИ-советы</h3><p class="muted small">${escapeHtml(reply)}</p>`);
+    } catch (err) {
+      Sheet.open(`<h3>ИИ-советы</h3><p class="muted small">Не удалось получить ответ. Попробуйте ещё раз чуть позже.</p>`);
+    }
   }
 });
 
@@ -698,7 +740,7 @@ function renderPrefChips(kind, elId) {
   `).join('') || `<span class="muted small">пока пусто</span>`;
 }
 
-document.getElementById('screen-nutrition-detail').addEventListener('click', e => {
+document.getElementById('screen-nutrition-detail').addEventListener('click', async e => {
   const t = e.target;
   if (t.closest('[data-action="edit-cal-goal"]')) {
     const s = Store.getState();
@@ -714,7 +756,31 @@ document.getElementById('screen-nutrition-detail').addEventListener('click', e =
     });
   }
   if (t.closest('[data-action="ai-meal-stub"]')) {
-    Sheet.open(`<h3>ИИ-план питания</h3><p class="muted small">Появится, когда бэкенд будет подключён к нейросети. Пока план заполняется вручную.</p>`);
+    Sheet.open(`<h3>ИИ-план питания</h3><p class="muted small">Думаю…</p>`);
+    const s = Store.getState();
+    const context =
+      `Цель по калориям: ${s.nutrition.goal} ккал. ` +
+      `Рост: ${s.profile.heightCm || '?'} см, вес: ${s.profile.weightKg || '?'} кг. ` +
+      `Желательные продукты: ${s.nutritionPrefs.liked.join(', ') || 'не указаны'}. ` +
+      `Нежелательные: ${s.nutritionPrefs.disliked.join(', ') || 'не указаны'}.`;
+    try {
+      const reply = await askAI(
+        'Составь простой план питания на день строго в 4 строках, без лишнего текста и markdown, в формате:\nЗавтрак: ...\nОбед: ...\nУжин: ...\nПерекус: ...',
+        context
+      );
+      const map = { 'завтрак': 'breakfast', 'обед': 'lunch', 'ужин': 'dinner', 'перекус': 'snack' };
+      reply.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
+        const m = line.match(/^([^:]+):\s*(.+)$/);
+        if (m) {
+          const key = map[m[1].trim().toLowerCase()];
+          if (key) Store.setMealPlan(key, m[2].trim());
+        }
+      });
+      renderNutritionDetail();
+      Sheet.open(`<h3>Готово</h3><p class="muted small">План питания заполнен ИИ на основе цели и предпочтений. Можно отредактировать вручную.</p>`);
+    } catch (err) {
+      Sheet.open(`<h3>Не получилось</h3><p class="muted small">Не удалось связаться с ИИ. Попробуйте ещё раз чуть позже.</p>`);
+    }
   }
   if (t.closest('[data-action="open-food-picker"]')) openFoodPickerSheet();
   if (t.closest('[data-action="add-food-custom"]')) openCustomFoodSheet();
@@ -788,14 +854,37 @@ function openCustomFoodSheet() {
   });
 }
 
-// --- food photo (camera) stub ---
+// --- food photo -> AI calorie estimate ---
 document.getElementById('food-photo-btn').addEventListener('click', () => document.getElementById('food-photo-input').click());
-document.getElementById('food-photo-input').addEventListener('change', e => {
-  if (!e.target.files || !e.target.files[0]) return;
-  Sheet.open(`
-    <h3>Фото получено</h3>
-    <p class="muted small">Распознавание калорий по фото ещё не подключено — для этого нужен бэкенд с ИИ-моделью, которая умеет анализировать изображения. Пока можно добавить блюдо вручную или через «Выбрать блюдо».</p>
-  `);
+document.getElementById('food-photo-input').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  Sheet.open(`<h3>Распознаём фото…</h3><p class="muted small">Секунду, ИИ анализирует изображение.</p>`);
+  try {
+    const blob = await resizeImageFile(file);
+    const buffer = await blob.arrayBuffer();
+    const imageBytes = Array.from(new Uint8Array(buffer));
+    const resp = await fetch(`${AI_WORKER_URL}/vision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBytes }),
+    });
+    const data = await resp.json();
+    Sheet.open(`
+      <h3>${escapeHtml(data.name || 'Блюдо')}</h3>
+      <p class="muted small">${escapeHtml(data.note || 'Оценка калорийности искусственным интеллектом, может отличаться от реальной.')}</p>
+      <div class="stat-row"><span class="stat-num">${data.calories || 0}</span><span class="muted">ккал (оценка)</span></div>
+      <button class="primary-btn" id="vision-add-btn">Добавить в дневник</button>
+    `, root => {
+      root.querySelector('#vision-add-btn').addEventListener('click', () => {
+        Store.addFoodLogEntry(data.name || 'Фото еды', data.calories || 0);
+        renderNutritionDetail(); renderToday(); renderOverview();
+        Sheet.close();
+      });
+    });
+  } catch (err) {
+    Sheet.open(`<h3>Не получилось распознать</h3><p class="muted small">Проверьте соединение и попробуйте ещё раз. Можно добавить блюдо вручную через «Выбрать блюдо» или «Своё».</p>`);
+  }
   e.target.value = '';
 });
 
@@ -905,16 +994,29 @@ function addMessage(role, text) {
   div.textContent = text;
   log.appendChild(div);
   log.scrollIntoView({ block: 'end' });
+  return div;
 }
 
-document.getElementById('chat-form').addEventListener('submit', e => {
+document.getElementById('chat-form').addEventListener('submit', async e => {
   e.preventDefault();
   const input = document.getElementById('chat-text');
   const val = input.value.trim();
   if (!val) return;
   addMessage('user', val);
   input.value = '';
-  setTimeout(() => addMessage('bot', 'Пока отвечаю заглушкой — подключение к настоящей модели будет добавлено отдельно.'), 300);
+  const bubble = addMessage('bot', 'Печатает…');
+  const s = Store.getState();
+  const context =
+    `Привычки сегодня: ${s.habits.filter(h => h.done).length}/${s.habits.length}. ` +
+    `Вода: ${s.water.count}/${s.water.goal} стаканов. ` +
+    `Калории: ${s.nutrition.eaten}/${s.nutrition.goal}. ` +
+    `Тренировка сегодня: ${s.workout.minutes} мин.`;
+  try {
+    const reply = await askAI(val, context);
+    bubble.textContent = reply || 'Пустой ответ от ИИ.';
+  } catch (err) {
+    bubble.textContent = 'Не получилось связаться с ИИ. Попробуйте ещё раз чуть позже.';
+  }
 });
 
 // ---- boot ----
